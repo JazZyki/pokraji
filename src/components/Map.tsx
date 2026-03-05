@@ -40,9 +40,14 @@ if (typeof window !== "undefined") {
 interface MapProps {
   routeCoordinates: [number, number][];
   userLocation: [number, number] | null;
+  userPath?: [number, number][]; // Nová volitelná vlastnost
 }
 
-export default function Map({ routeCoordinates, userLocation }: MapProps) {
+export default function Map({
+  routeCoordinates,
+  userLocation,
+  userPath = [],
+}: MapProps) {
   const center: [number, number] = [49.811, 14.295];
   const apiKey = process.env.NEXT_PUBLIC_MAPY_API_KEY;
 
@@ -60,6 +65,10 @@ export default function Map({ routeCoordinates, userLocation }: MapProps) {
       <Polyline
         positions={routeCoordinates}
         pathOptions={{ color: "#16a34a", weight: 5, opacity: 1 }}
+      />
+      <Polyline
+        positions={userPath}
+        pathOptions={{ color: "#3b82f6", weight: 4, dashArray: "5, 10" }} // Přerušovaná čára vypadá skvěle
       />
 
       <MapRecenter location={userLocation} />
