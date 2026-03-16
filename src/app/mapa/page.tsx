@@ -26,7 +26,13 @@ export default function MapPage() {
 
   const saveLocation = useCallback(async (lat: number, lon: number) => {
     const teamId = localStorage.getItem("knin_team_id");
-    if (!teamId) return;
+
+    console.log("📍 Pokus o odeslání polohy:", { teamId, lat, lon });
+
+    if (!teamId) {
+      console.error("❌ Chyba: Chybí team_id v localStorage!");
+      return;
+    }
 
     const { data, error } = await supabase.rpc("track_team_location", {
       t_id: teamId,
@@ -34,10 +40,11 @@ export default function MapPage() {
       lon_val: lon,
     });
 
-    if (error) console.error("Chyba při ukládání:", error);
-
-    if (data?.is_off) {
-      console.warn("Jsi mimo trasu!");
+    if (error) {
+      console.error("❌ Supabase RPC error:", error.message);
+      console.error("Detail chyby:", error.details);
+    } else {
+      console.log("✅ Poloha úspěšně uložena v DB:", data);
     }
   }, []);
 
