@@ -36,7 +36,7 @@ export default function MapPage() {
       return;
     }
 
-    const { data, error } = await supabase.rpc("track_team_location", {
+    const { data: _data, error } = await supabase.rpc("track_team_location", {
       t_id: teamId,
       lat_val: lat,
       lon_val: lon,
