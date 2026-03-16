@@ -21,6 +21,8 @@ export default function MapPage() {
   const [userPath, setUserPath] = useState<[number, number][]>([]);
   const [isTracking, setIsTracking] = useState(false);
 
+  const [debugMsg, setDebugMsg] = useState<string>("Čekám na GPS...");
+
   // Ref pro uchování poslední uložené pozice (aby se neukládalo každou vteřinu)
   const lastSavedPos = useRef<{ lat: number; lon: number } | null>(null);
 
@@ -41,10 +43,10 @@ export default function MapPage() {
     });
 
     if (error) {
-      console.error("❌ Supabase RPC error:", error.message);
-      console.error("Detail chyby:", error.details);
+      setDebugMsg(`❌ Chyba DB: ${error.message}`);
     } else {
-      console.log("✅ Poloha úspěšně uložena v DB:", data);
+      // Ukážeme čas posledního úspěšného uložení
+      setDebugMsg(`✅ Uloženo: ${new Date().toLocaleTimeString()}`);
     }
   }, []);
 
@@ -132,6 +134,11 @@ export default function MapPage() {
         </button>
       </div>
       <div className="flex-grow relative">
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[1000] pointer-events-none">
+          <div className="bg-black/70 text-white px-4 py-2 rounded-full text-xs font-mono backdrop-blur-md border border-white/20 shadow-2xl">
+            {debugMsg}
+          </div>
+        </div>
         <MapWithNoSSR
           routeCoordinates={route}
           userLocation={userLocation}
