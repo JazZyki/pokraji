@@ -1,0 +1,36 @@
+{
+  "name": "PoKraji - stezka kolem katastru Knína",
+  "short_name": "PoKraji",
+  "description": "Překroč své hranice, obejdi ty místní. Stezka kolem katastru Knína",
+  "orientation": "portrait",
+  "protocol_handlers": [
+    {
+      "protocol": "web+ptacek",
+      "url": "/ptacek?url=%s"
+    }
+  ],
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "256x256",
+      "type": "image/x-icon"
+    },
+    {
+      "src": "/web-app-manifest-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/web-app-manifest-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "id": "/",
+  "start_url": "/",
+  "theme_color": "#ffffff",
+  "background_color": "#e40521",
+  "display": "standalone"
+}
