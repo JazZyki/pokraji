@@ -1,5 +1,11 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import { Work_Sans } from "next/font/google";
+
+const WorkSans = Work_Sans({
+  variable: "--font-work-sans",
+  subsets: ["latin"],
+});
 
 export const metadata: Metadata = {
   title: "Nový Knín Trek",
@@ -23,7 +29,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="cs">
-      <body>
+      <body className={`${WorkSans.variable} antialiased`}>
         {children}
         <script
           dangerouslySetInnerHTML={{
