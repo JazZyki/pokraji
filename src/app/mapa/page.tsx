@@ -4,6 +4,18 @@ import dynamic from "next/dynamic";
 import { useEffect, useState, useCallback, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import Image from "next/image";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+
+import { SokolLoader } from "@/components/SokolLoader";
 
 const MapWithNoSSR = dynamic(() => import("@/components/Map"), {
   ssr: false,
@@ -194,12 +206,14 @@ export default function MapPage() {
 
   if (loading)
     return (
-      <div className="p-10 text-center font-bold">Načítám mapu a trasu...</div>
+      <div className="h-screen w-full flex items-center justify-center bg-slate-50">
+        <SokolLoader />
+      </div>
     );
 
   return (
     <main className="h-screen w-full flex flex-col overflow-hidden text-slate-900">
-      <div className="p-4 bg-white shadow-md z-10 flex justify-between items-center">
+      <div className="p-4 bg-white shadow-md flex justify-between items-center z-50">
         <div className="flex flex-col">
           <Image
             src="/pokraji_logo.png"
@@ -209,22 +223,43 @@ export default function MapPage() {
             className="mb-1"
           />
         </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger>
+            <div className="inline-flex items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground cursor-pointer shadow-sm">
+              Menu
+            </div>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent>
+            <DropdownMenuGroup>
+              <DropdownMenuLabel>My Account</DropdownMenuLabel>
+              <DropdownMenuItem>Profile</DropdownMenuItem>
+              <DropdownMenuItem>Billing</DropdownMenuItem>
+            </DropdownMenuGroup>
+            <DropdownMenuSeparator />
+            <DropdownMenuGroup>
+              <DropdownMenuItem>Team</DropdownMenuItem>
+              <DropdownMenuItem>Subscription</DropdownMenuItem>
+            </DropdownMenuGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
-      <div className="bg-white border-t-2 border-t-primary">
-        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
+      <div className="flex justify-between items-center bg-white p-3 border-t-2 border-t-primary">
+        <span className="text-xl font-bold font-tyrs text-slate-500 mt-1">
           Vzdálenost:{" "}
-          <span className="text-slate-800">{totalDistance.toFixed(2)} km</span>
+          <span className="block text-3xl font-fugner text-primary">
+            {totalDistance.toFixed(2)} km
+          </span>
         </span>
-        <button
+        <Button
           onClick={() => setIsTracking(!isTracking)}
-          className={`px-8 py-2 rounded-full font-black text-sm text-white transition-all shadow-lg active:scale-95 ${
-            isTracking
-              ? "bg-red-500 hover:bg-red-600"
-              : "bg-blue-600 hover:bg-blue-700"
+          variant={"secondary"}
+          size={"lg"}
+          className={`px-8 h-12 py-4 rounded-full font-bold text-lg text-white uppercase transition-all shadow-lg ${
+            isTracking ? "bg-primary" : "bg-secondary"
           }`}
         >
-          {isTracking ? "STOP" : "START TREK"}
-        </button>
+          {isTracking ? "Ukončit trasu" : "Začít trasu"}
+        </Button>
       </div>
 
       <div className="flex-grow relative">
@@ -233,11 +268,13 @@ export default function MapPage() {
             {debugMsg}
           </div>
         </div>
-        <MapWithNoSSR
-          routeCoordinates={route}
-          userLocation={userLocation}
-          userPathWithDist={userPath}
-        />
+        {!loading && (
+          <MapWithNoSSR
+            routeCoordinates={route}
+            userLocation={userLocation}
+            userPathWithDist={userPath}
+          />
+        )}
       </div>
     </main>
   );

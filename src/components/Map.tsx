@@ -53,7 +53,7 @@ export default function Map({
     <MapContainer
       center={center}
       zoom={13}
-      style={{ height: "100%", width: "100%" }}
+      style={{ height: "100%", width: "100%", zIndex: 0 }}
     >
       <TileLayer
         url={`https://api.mapy.cz/v1/maptiles/outdoor/256/{z}/{x}/{y}?apikey=${apiKey}`}

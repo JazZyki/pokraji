@@ -5,6 +5,8 @@ import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
 import { Users, Play, Map as MapIcon, Download, Search } from "lucide-react";
 import Image from "next/image";
+import { SokolText } from "@/components/SokolText";
+import { SokolLoader } from "@/components/SokolLoader";
 
 // Rozhraní pro událost instalace (PWA)
 interface BeforeInstallPromptEvent extends Event {
@@ -158,8 +160,8 @@ export default function RegisterPage() {
 
   if (loading)
     return (
-      <div className="min-h-screen flex items-center justify-center font-bold text-green-700">
-        Načítám...
+      <div className="h-screen w-full flex items-center justify-center bg-slate-50">
+        <SokolLoader />
       </div>
     );
 
@@ -175,7 +177,7 @@ export default function RegisterPage() {
             className="w-full h-auto mb-6 object-contain"
           />
         </div>
-        <div className="flex flex-col gap-6 mb-6">
+        <div className="flex flex-col gap-6">
           {showInstallBtn && (
             <button
               onClick={handleInstallClick}
@@ -191,16 +193,16 @@ export default function RegisterPage() {
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
                   Tým připraven
                 </p>
-                <h2 className="text-3xl font-black text-slate-800 uppercase">
-                  {existingTeam.name}
+                <h2 className="text-3xl text-secondary">
+                  <SokolText text={existingTeam.name} />
                 </h2>
               </div>
-              <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
+              <div className="bg-slate-100 rounded-lg p-4 border border-slate-100">
                 <div className="flex flex-wrap justify-center gap-2">
                   {existingTeam.members.map((m, i) => (
                     <span
                       key={i}
-                      className="bg-white px-3 py-1 rounded-full text-sm shadow-sm border border-slate-200 text-slate-600 font-medium"
+                      className="bg-white px-3 py-1 rounded-full text-sm shadow-sm border-2 border-secondary/90 text-secondary/90 font-medium"
                     >
                       {m}
                     </span>
@@ -210,13 +212,13 @@ export default function RegisterPage() {
               <div className="flex flex-col gap-3">
                 <button
                   onClick={() => router.push("/mapa")}
-                  className="w-full bg-green-600 hover:bg-green-700 text-white font-black py-4 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-green-200 active:scale-95"
+                  className="w-full bg-secondary text-white font-bold py-3 rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg shadow-secondary/50 active:scale-95"
                 >
                   <MapIcon className="size-5" /> VSTOUPIT DO MAPY
                 </button>
                 <button
                   onClick={handleLogout}
-                  className="text-[10px] text-slate-300 hover:text-red-500 uppercase font-bold tracking-tighter transition-colors"
+                  className="text-sm mt-6 text-slate-300 hover:text-red-500 uppercase font-bold tracking-tighter transition-colors"
                 >
                   Odhlásit tým
                 </button>

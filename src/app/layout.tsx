@@ -1,9 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
-import { Work_Sans, Geist } from "next/font/google";
+import { Work_Sans } from "next/font/google";
 import { cn } from "@/lib/utils";
-
-const geist = Geist({subsets:['latin'],variable:'--font-sans'});
+import { Footer } from "@/components/Footer";
 
 const WorkSans = Work_Sans({
   variable: "--font-work-sans",
@@ -31,7 +30,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="cs" className={cn("font-sans", geist.variable)}>
+    <html lang="cs" className={cn("font-sans")}>
       <body className={`${WorkSans.variable} antialiased`}>
         {children}
         <script
@@ -45,6 +44,7 @@ export default function RootLayout({
     `,
           }}
         />
+        <Footer />
       </body>
     </html>
   );
