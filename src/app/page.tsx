@@ -166,135 +166,138 @@ export default function RegisterPage() {
   return (
     <div className="min-h-screen bg-secondary/80 flex flex-col items-center justify-center p-6 text-slate-900">
       <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 border border-slate-100">
-        <Image
-          src="/pokraji_logo.png"
-          alt="PoTrati Sokol Nový Knín"
-          width={100}
-          height={100}
-          className="w-full h-auto mb-6 object-contain"
-        />
-
-        {showInstallBtn && (
-          <button
-            onClick={handleInstallClick}
-            className="mb-6 w-full bg-slate-100 hover:bg-slate-200 text-slate-700 py-2 px-4 rounded-lg text-xs font-bold flex items-center justify-center gap-2 border border-slate-200 transition-all active:scale-95"
-          >
-            <Download className="size-4" /> INSTALOVAT JAKO APLIKACI
-          </button>
-        )}
-
-        {existingTeam ? (
-          <div className="text-center space-y-6 py-2">
-            <div className="space-y-1">
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
-                Tým připraven
-              </p>
-              <h2 className="text-3xl font-black text-slate-800 uppercase">
-                {existingTeam.name}
-              </h2>
-            </div>
-            <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
-              <div className="flex flex-wrap justify-center gap-2">
-                {existingTeam.members.map((m, i) => (
-                  <span
-                    key={i}
-                    className="bg-white px-3 py-1 rounded-full text-sm shadow-sm border border-slate-200 text-slate-600 font-medium"
-                  >
-                    {m}
-                  </span>
-                ))}
-              </div>
-            </div>
-            <div className="flex flex-col gap-3">
-              <button
-                onClick={() => router.push("/mapa")}
-                className="w-full bg-green-600 hover:bg-green-700 text-white font-black py-4 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-green-200 active:scale-95"
-              >
-                <MapIcon className="size-5" /> VSTOUPIT DO MAPY
-              </button>
-              <button
-                onClick={handleLogout}
-                className="text-[10px] text-slate-300 hover:text-red-500 uppercase font-bold tracking-tighter transition-colors"
-              >
-                Odhlásit tým
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-6">
-            <div className="flex bg-slate-100 p-1 rounded-xl">
-              <button
-                onClick={() => setMode("register")}
-                className={`flex-1 py-2 text-xs font-bold rounded-lg transition ${
-                  mode === "register"
-                    ? "bg-white shadow-sm text-green-700"
-                    : "text-slate-500"
-                }`}
-              >
-                NOVÝ TÝM
-              </button>
-              <button
-                onClick={() => setMode("login")}
-                className={`flex-1 py-2 text-xs font-bold rounded-lg transition ${
-                  mode === "login"
-                    ? "bg-white shadow-sm text-green-700"
-                    : "text-slate-500"
-                }`}
-              >
-                MÁM TÝM
-              </button>
-            </div>
-
-            <form
-              onSubmit={mode === "register" ? handleRegister : handleLogin}
-              className="space-y-6"
+        <div className="text-center mb-6">
+          <Image
+            src="/pokraji_logo.png"
+            alt="PoTrati Sokol Nový Knín"
+            width={100}
+            height={100}
+            className="w-full h-auto mb-6 object-contain"
+          />
+        </div>
+        <div className="flex flex-col gap-6 mb-6">
+          {showInstallBtn && (
+            <button
+              onClick={handleInstallClick}
+              className="w-full flex items-center justify-center gap-2 py-2 rounded-lg text-primary border-2 border-primary"
             >
-              <p className="text-slate-500 text-sm text-center">
-                {mode === "register"
-                  ? "Zaregistruj tým a vyraz na 50km trasu!"
-                  : "Zadej přesný název týmu pro pokračování."}
-              </p>
+              <Download className="size-4" /> INSTALOVAT JAKO APLIKACI
+            </button>
+          )}
 
-              <div className="space-y-4">
-                <input
-                  required
-                  className="w-full p-3 border rounded-xl focus:ring-2 focus:ring-green-500 outline-none"
-                  placeholder="Název týmu"
-                  value={teamName}
-                  onChange={(e) => setTeamName(e.target.value)}
-                />
-
-                {mode === "register" && (
-                  <div className="relative">
-                    <Users className="absolute left-3 top-3.5 text-slate-400 size-5" />
-                    <input
-                      required
-                      className="w-full p-3 pl-10 border rounded-xl focus:ring-2 focus:ring-green-500 outline-none"
-                      placeholder="Jan, Marie, Petr..."
-                      value={members}
-                      onChange={(e) => setMembers(e.target.value)}
-                    />
-                  </div>
-                )}
+          {existingTeam ? (
+            <div className="text-center space-y-6 py-2">
+              <div className="space-y-1">
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+                  Tým připraven
+                </p>
+                <h2 className="text-3xl font-black text-slate-800 uppercase">
+                  {existingTeam.name}
+                </h2>
+              </div>
+              <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
+                <div className="flex flex-wrap justify-center gap-2">
+                  {existingTeam.members.map((m, i) => (
+                    <span
+                      key={i}
+                      className="bg-white px-3 py-1 rounded-full text-sm shadow-sm border border-slate-200 text-slate-600 font-medium"
+                    >
+                      {m}
+                    </span>
+                  ))}
+                </div>
+              </div>
+              <div className="flex flex-col gap-3">
+                <button
+                  onClick={() => router.push("/mapa")}
+                  className="w-full bg-green-600 hover:bg-green-700 text-white font-black py-4 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-green-200 active:scale-95"
+                >
+                  <MapIcon className="size-5" /> VSTOUPIT DO MAPY
+                </button>
+                <button
+                  onClick={handleLogout}
+                  className="text-[10px] text-slate-300 hover:text-red-500 uppercase font-bold tracking-tighter transition-colors"
+                >
+                  Odhlásit tým
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              <div className="flex bg-slate-200 p-1 rounded-xl">
+                <button
+                  onClick={() => setMode("register")}
+                  className={`flex-1 py-2 text-sm font-bold rounded-lg transition ${
+                    mode === "register"
+                      ? "bg-secondary shadow-sm text-white"
+                      : "text-slate-500"
+                  }`}
+                >
+                  NOVÝ TÝM
+                </button>
+                <button
+                  onClick={() => setMode("login")}
+                  className={`flex-1 py-2 text-sm font-bold rounded-lg transition ${
+                    mode === "login"
+                      ? "bg-secondary shadow-sm text-white"
+                      : "text-slate-500"
+                  }`}
+                >
+                  MÁM TÝM
+                </button>
               </div>
 
-              <button
-                disabled={loading}
-                className="w-full bg-green-600 hover:bg-green-700 text-white font-black py-4 rounded-xl transition shadow-lg flex items-center justify-center gap-2"
+              <form
+                onSubmit={mode === "register" ? handleRegister : handleLogin}
+                className="space-y-6"
               >
-                {mode === "register" ? (
-                  <>
-                    <Play className="size-5" /> START DOBRODRUŽSTVÍ
-                  </>
-                ) : (
-                  <>
-                    <Search className="size-5" /> NAJÍT MŮJ TREK
-                  </>
-                )}
-              </button>
-            </form>
-          </div>
-        )}
+                <p className="text-slate-500 text text-center font-bold">
+                  {mode === "register"
+                    ? "Zaregistruj tým a vyraz na 50km trasu!"
+                    : "Zadej přesný název týmu pro pokračování."}
+                </p>
+
+                <div className="space-y-4">
+                  <input
+                    required
+                    className="w-full p-3 border-2 border-secondary text-slate-700 rounded-xl focus:ring-2 focus:ring-secondary outline-none"
+                    placeholder="Název týmu"
+                    value={teamName}
+                    onChange={(e) => setTeamName(e.target.value)}
+                  />
+
+                  {mode === "register" && (
+                    <div className="relative">
+                      <Users className="absolute left-3 top-3.5 text-secondary size-5" />
+                      <input
+                        required
+                        className="w-full p-3 pl-10 border-2 border-secondary text-slate-700 rounded-xl focus:ring-2 focus:ring-secondary outline-none"
+                        placeholder="Jan, Marie, Petr..."
+                        value={members}
+                        onChange={(e) => setMembers(e.target.value)}
+                      />
+                    </div>
+                  )}
+                </div>
+
+                <button
+                  disabled={loading}
+                  className="flex items-center justify-center gap-2 w-full bg-secondary text-white font-bold py-4 rounded-xl transition shadow-lg"
+                >
+                  {mode === "register" ? (
+                    <>
+                      <Play className="size-5" /> START DOBRODRUŽSTVÍ
+                    </>
+                  ) : (
+                    <>
+                      <Search className="size-5" /> NAJÍT MŮJ TREK
+                    </>
+                  )}
+                </button>
+              </form>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

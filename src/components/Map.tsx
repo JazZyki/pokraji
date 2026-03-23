@@ -70,6 +70,8 @@ export default function Map({
       {userPathWithDist.map((point, idx) => {
         if (idx === 0) return null;
         const prevPoint = userPathWithDist[idx - 1];
+        if (!prevPoint || !point || !prevPoint.coords || !point.coords)
+          return null;
         return (
           <Polyline
             key={idx}

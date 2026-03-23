@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import { useEffect, useState, useCallback, useRef } from "react";
 import { supabase } from "@/lib/supabase";
+import Image from "next/image";
 
 const MapWithNoSSR = dynamic(() => import("@/components/Map"), {
   ssr: false,
@@ -200,16 +201,20 @@ export default function MapPage() {
     <main className="h-screen w-full flex flex-col overflow-hidden text-slate-900">
       <div className="p-4 bg-white shadow-md z-10 flex justify-between items-center">
         <div className="flex flex-col">
-          <h1 className="text-xl font-black text-green-700 tracking-tight leading-none">
-            Nový Knín Trek
-          </h1>
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
-            Vzdálenost:{" "}
-            <span className="text-slate-800">
-              {totalDistance.toFixed(2)} km
-            </span>
-          </span>
+          <Image
+            src="/pokraji_logo.png"
+            alt="Logo Knin"
+            width={240}
+            height={170}
+            className="mb-1"
+          />
         </div>
+      </div>
+      <div className="bg-white border-t-2 border-t-primary">
+        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
+          Vzdálenost:{" "}
+          <span className="text-slate-800">{totalDistance.toFixed(2)} km</span>
+        </span>
         <button
           onClick={() => setIsTracking(!isTracking)}
           className={`px-8 py-2 rounded-full font-black text-sm text-white transition-all shadow-lg active:scale-95 ${
