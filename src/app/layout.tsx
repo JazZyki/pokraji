@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import "leaflet/dist/leaflet.css";
 import { Work_Sans } from "next/font/google";
 import { cn } from "@/lib/utils";
 import { Footer } from "@/components/Footer";
