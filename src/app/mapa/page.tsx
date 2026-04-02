@@ -74,6 +74,10 @@ export default function MapPage() {
   const [poiPoints, setPoiPoints] = useState<PoiPoint[]>([]);
   const [unlockedIds, setUnlockedIds] = useState<Set<string>>(new Set());
   const [selectedPoi, setSelectedPoi] = useState<PoiPoint | null>(null);
+  const isTrackingRef = useRef(isTracking);
+  useEffect(() => {
+    isTrackingRef.current = isTracking;
+  }, [isTracking]);
 
   // Výpočet celkové vzdálenosti
   const totalDistance = segments.reduce((acc, segment) => {
@@ -230,44 +234,49 @@ export default function MapPage() {
 
   // Watch Position (GPS)
   useEffect(() => {
-  if (!isTracking) return;
-
+  // GPS spustíme hned, ale reagovat na body budeme jen přes Ref
   const watchId = navigator.geolocation.watchPosition(
-    async (pos) => { // Přidáno async
-      const { latitude, longitude, accuracy } = pos.coords;
-      if (accuracy > 80) return; // V lese buďme trochu tolerantnější
+    async (pos) => {
+      // DŮLEŽITÉ: Pokud uživatel nezapl tracking, nic neděláme, 
+      // ale spojení s GPS držíme otevřené a stabilní
+      if (!isTrackingRef.current) return;
 
+      const { latitude, longitude, accuracy } = pos.coords;
+
+      // Logika pro přesnost (tolerantní start)
+      const isFirstPoint = !lastSavedPos.current;
+      const maxAcc = isFirstPoint ? 200 : 80;
+
+      if (accuracy > maxAcc) {
+        setDebugMsg(`Slabý signál: ${Math.round(accuracy)}m`);
+        return;
+      }
+
+      // Aktualizace UI polohy
       setUserLocation([latitude, longitude]);
+      setDebugMsg("✅ Signál OK");
 
       // --- KONTROLA POI ---
-      // Použijeme for...of místo forEach pro lepší práci s async/await
       for (const poi of poiPoints) {
         const dist = calculateDistance(latitude, longitude, poi.lat, poi.lon) * 1000;
-
-        if (dist <= 60) { // Zvětšeno na 60m pro jistotu
+        if (dist <= 60) {
           const teamId = localStorage.getItem("knin_team_id");
-          
-          // Zápis do DB - pokud projde, aktualizujeme stav
           const { error } = await supabase
             .from("team_poi_progress")
             .insert({ team_id: teamId, poi_id: poi.id });
 
-          // Pokud není chyba (nebo už tam záznam je), přidáme do Setu
-          if (!error || (error && 'code' in error && error.code === '23505')) {
+          if (!error || (error && "code" in error && error.code === "23505")) {
             setUnlockedIds((prev) => {
               if (prev.has(poi.id)) return prev;
               const next = new Set(prev);
               next.add(poi.id);
               return next;
             });
-            setDebugMsg(`📍 ODEMČENO: ${poi.name}`);
-          } else {
-            console.error("Chyba při odemykání POI:", error);
           }
         }
       }
 
-      // --- UKLÁDÁNÍ TRASY ---
+      // --- UKLÁDÁNÍ TRASY (saveLocation se teď zavolá správně) ---
       let shouldSave = false;
       if (!lastSavedPos.current) {
         shouldSave = true;
@@ -276,20 +285,23 @@ export default function MapPage() {
           Math.pow(latitude - lastSavedPos.current.lat, 2) +
           Math.pow(longitude - lastSavedPos.current.lon, 2)
         );
+        // Cca 8-10 metrů
         if (d > 0.00008) shouldSave = true;
       }
 
       if (shouldSave) {
+        console.log("Ukládám bod do DB...");
         saveLocation(latitude, longitude);
         lastSavedPos.current = { lat: latitude, lon: longitude };
       }
     },
     (err) => setDebugMsg(`❌ GPS: ${err.message}`),
-    { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
   );
 
   return () => navigator.geolocation.clearWatch(watchId);
-}, [isTracking, poiPoints, saveLocation]);
+  // ODEBRÁNO isTracking a saveLocation ze závislostí
+}, [poiPoints, saveLocation]);
 
   if (loading)
     return (
@@ -350,12 +362,12 @@ export default function MapPage() {
             {debugMsg}
           </div>
         </div>
-        <PoiModal 
-      poi={selectedPoi}
-      isOpen={!!selectedPoi}
-      onClose={() => setSelectedPoi(null)}
-      isUnlocked={selectedPoi ? unlockedIds.has(selectedPoi.id) : false}
-    />
+        <PoiModal
+          poi={selectedPoi}
+          isOpen={!!selectedPoi}
+          onClose={() => setSelectedPoi(null)}
+          isUnlocked={selectedPoi ? unlockedIds.has(selectedPoi.id) : false}
+        />
         <MapWithNoSSR
           routeCoordinates={route}
           userLocation={userLocation}
