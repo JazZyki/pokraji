@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
 import { Users, Play, Map as MapIcon, Download, Search } from "lucide-react";
 import Image from "next/image";
+import { Button } from "@/components/ui/button";
 import { SokolText } from "@/components/SokolText";
 import { SokolLoader } from "@/components/SokolLoader";
 
@@ -54,6 +55,7 @@ export default function RegisterPage() {
     }
 
     if (data) {
+      document.cookie = `knin_team_id=${data.id}; path=/; max-age=86400; SameSite=Lax`;
       localStorage.setItem("knin_team_id", data.id);
       localStorage.setItem("knin_team_name", data.team_name);
       router.push("/mapa");
@@ -179,12 +181,9 @@ export default function RegisterPage() {
         </div>
         <div className="flex flex-col gap-6">
           {showInstallBtn && (
-            <button
-              onClick={handleInstallClick}
-              className="w-full flex items-center justify-center gap-2 py-2 rounded-lg text-primary border-2 border-primary"
-            >
+            <Button onClick={handleInstallClick} variant="outline" size="lg">
               <Download className="size-4" /> INSTALOVAT JAKO APLIKACI
-            </button>
+            </Button>
           )}
 
           {existingTeam ? (
@@ -210,18 +209,16 @@ export default function RegisterPage() {
                 </div>
               </div>
               <div className="flex flex-col gap-3">
-                <button
+                <Button
                   onClick={() => router.push("/mapa")}
-                  className="w-full bg-secondary text-white font-bold py-3 rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg shadow-secondary/50 active:scale-95"
+                  variant={"secondary"}
+                  size={"lgx"}
                 >
                   <MapIcon className="size-5" /> VSTOUPIT DO MAPY
-                </button>
-                <button
-                  onClick={handleLogout}
-                  className="text-sm mt-6 text-slate-300 hover:text-red-500 uppercase font-bold tracking-tighter transition-colors"
-                >
+                </Button>
+                <Button onClick={handleLogout} variant={"ghost"} size={"lg"}>
                   Odhlásit tým
-                </button>
+                </Button>
               </div>
             </div>
           ) : (
@@ -282,9 +279,11 @@ export default function RegisterPage() {
                   )}
                 </div>
 
-                <button
+                <Button
                   disabled={loading}
-                  className="flex items-center justify-center gap-2 w-full bg-secondary text-white font-bold py-4 rounded-xl transition shadow-lg"
+                  /*className="flex items-center justify-center gap-2 w-full bg-secondary text-white font-bold py-4 rounded-xl transition shadow-lg"*/
+                  variant={"secondary"}
+                  size={"lgx"}
                 >
                   {mode === "register" ? (
                     <>
@@ -292,10 +291,10 @@ export default function RegisterPage() {
                     </>
                   ) : (
                     <>
-                      <Search className="size-5" /> NAJÍT MŮJ TREK
+                      <Search className="size-5" /> NAJÍT MŮJ TÝM
                     </>
                   )}
-                </button>
+                </Button>
               </form>
             </div>
           )}

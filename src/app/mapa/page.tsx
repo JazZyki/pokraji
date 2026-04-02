@@ -28,6 +28,11 @@ interface GeoJSONPath {
 interface TrackPoint {
   coords: [number, number];
   dist: number;
+  sessionId?: string; // Nové
+}
+
+interface TrackSegment {
+  points: TrackPoint[];
 }
 
 // Typy pro WakeLock (v TS zatím nejsou standardem)
@@ -58,159 +63,78 @@ function calculateDistance(
 export default function MapPage() {
   const [route, setRoute] = useState<[number, number][]>([]);
   const [loading, setLoading] = useState(true);
-  const [userLocation, setUserLocation] = useState<[number, number] | null>(
-    null
-  );
-  const [userPath, setUserPath] = useState<TrackPoint[]>([]);
+  const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
   const [isTracking, setIsTracking] = useState(false);
   const [debugMsg, setDebugMsg] = useState<string>("Čekám na GPS...");
   const lastSavedPos = useRef<{ lat: number; lon: number } | null>(null);
+  
+  // DRŽÍME SEGMENTY (pro výpočet a vykreslení)
+  const [segments, setSegments] = useState<TrackSegment[]>([]);
 
-  const totalDistance = userPath.reduce((acc, point, idx) => {
-    if (idx === 0) return 0;
-    const prev = userPath[idx - 1];
-    return (
-      acc +
-      calculateDistance(
-        prev.coords[0],
-        prev.coords[1],
-        point.coords[0],
-        point.coords[1]
-      )
-    );
+  // VÝPOČET VZDÁLENOSTI (ze všech segmentů)
+  const totalDistance = segments.reduce((acc, segment) => {
+    const segmentDist = segment.points.reduce((segAcc, point, idx) => {
+      if (idx === 0) return 0;
+      const prev = segment.points[idx - 1];
+      return segAcc + calculateDistance(prev.coords[0], prev.coords[1], point.coords[0], point.coords[1]);
+    }, 0);
+    return acc + segmentDist;
   }, 0);
+
+  // FUNKCE PRO ZAPNUTÍ/VYPNUTÍ TRASY
+  const handleToggleTracking = () => {
+    if (!isTracking) {
+      const newSessionId = crypto.randomUUID();
+      localStorage.setItem("current_session_id", newSessionId);
+      // Přidáme nový prázdný segment do stavu, abychom do něj mohli hned zapisovat
+      setSegments(prev => [...prev, { points: [] }]);
+      setIsTracking(true);
+    } else {
+      localStorage.removeItem("current_session_id");
+      setIsTracking(false);
+    }
+  };
 
   const saveLocation = useCallback(async (lat: number, lon: number) => {
     const teamId = localStorage.getItem("knin_team_id");
-    if (!teamId) return;
+    const sessionId = localStorage.getItem("current_session_id");
+    
+    if (!teamId || !sessionId) return;
 
     const { data, error } = await supabase.rpc("track_team_location", {
       t_id: teamId,
       lat_val: lat,
       lon_val: lon,
+      s_id: sessionId,
     });
 
     if (error) {
       setDebugMsg(`❌ Chyba DB: ${error.message}`);
     } else if (data) {
-      setUserPath((prev) => [...prev, { coords: [lat, lon], dist: data.dist }]);
-      if (data.is_off) {
-        setDebugMsg(`❗ MIMO TRASU! (${Math.round(data.dist)}m)`);
-      } else {
-        setDebugMsg(`✅ Uloženo: ${new Date().toLocaleTimeString()}`);
-      }
+      const newPoint = { coords: [lat, lon] as [number, number], dist: data.dist, sessionId };
+      
+      // AKTUALIZACE STAVU: Přidáme bod do posledního segmentu
+      setSegments(prev => {
+        const newSegments = [...prev];
+        const lastIdx = newSegments.length - 1;
+        if (lastIdx >= 0) {
+          newSegments[lastIdx] = {
+            ...newSegments[lastIdx],
+            points: [...newSegments[lastIdx].points, newPoint]
+          };
+        } else {
+          newSegments.push({ points: [newPoint] });
+        }
+        return newSegments;
+      });
+
+      setDebugMsg(data.is_off ? `❗ MIMO TRASU! (${Math.round(data.dist)}m)` : `✅ Uloženo: ${new Date().toLocaleTimeString()}`);
     }
   }, []);
 
-  useEffect(() => {
-    const fetchInitialData = async () => {
-      try {
-        setLoading(true);
-        const teamId = localStorage.getItem("knin_team_id");
-        const { data: routeData } = await supabase
-          .from("route_display")
-          .select("geojson_data")
-          .maybeSingle();
-
-        if (routeData?.geojson_data) {
-          const geojson = routeData.geojson_data as unknown as GeoJSONPath;
-          setRoute(geojson.coordinates.map(([lon, lat]) => [lat, lon]));
-        }
-
-        if (teamId) {
-          const { data: history, error: histError } = await supabase
-            .from("team_tracking")
-            .select("lat_val, lon_val, distance_from_route")
-            .eq("team_id", teamId)
-            .order("created_at", { ascending: true });
-
-          if (!histError && history && history.length > 0) {
-            const historyPoints: TrackPoint[] = history.map((h) => ({
-              coords: [h.lat_val, h.lon_val],
-              dist: h.distance_from_route || 0,
-            }));
-            setUserPath(historyPoints);
-            const lastPoint = historyPoints[historyPoints.length - 1].coords;
-            setUserLocation(lastPoint);
-            lastSavedPos.current = { lat: lastPoint[0], lon: lastPoint[1] };
-          }
-        }
-      } catch {
-        setDebugMsg("❌ Chyba při načítání dat");
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchInitialData();
-  }, []);
-
-  useEffect(() => {
-    if (!isTracking || !("geolocation" in navigator)) return;
-
-    const watchId = navigator.geolocation.watchPosition(
-      (position) => {
-        const { latitude, longitude, accuracy } = position.coords;
-        if (accuracy > 100) return;
-
-        const newPos: [number, number] = [latitude, longitude];
-        setUserLocation(newPos);
-
-        let shouldSave = false;
-        if (!lastSavedPos.current) {
-          shouldSave = true;
-        } else {
-          const dist = Math.sqrt(
-            Math.pow(latitude - lastSavedPos.current.lat, 2) +
-              Math.pow(longitude - lastSavedPos.current.lon, 2)
-          );
-          if (dist > 0.00007) shouldSave = true;
-        }
-
-        if (shouldSave) {
-          saveLocation(latitude, longitude);
-          lastSavedPos.current = { lat: latitude, lon: longitude };
-        }
-      },
-      (error) => setDebugMsg(`❌ GPS Error: ${error.message}`),
-      { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
-    );
-    return () => navigator.geolocation.clearWatch(watchId);
-  }, [isTracking, saveLocation]);
-
-  useEffect(() => {
-    let wakeLock: WakeLockSentinel | null = null;
-
-    const requestWakeLock = async () => {
-      try {
-        if ("wakeLock" in navigator) {
-          wakeLock = await navigator.wakeLock.request("screen");
-          setDebugMsg("🔒 Režim aplikace: Aktivní");
-        }
-      } catch (error) {
-        if (error instanceof Error) {
-          setDebugMsg(`⚠️ WakeLock selhal: ${error.message}`);
-        }
-      }
-    };
-
-    if (isTracking) requestWakeLock();
-
-    return () => {
-      if (wakeLock) {
-        wakeLock.release().then(() => {
-          wakeLock = null;
-        });
-      }
-    };
-  }, [isTracking]);
-
-  if (loading)
-    return (
-      <div className="h-screen w-full flex items-center justify-center bg-slate-50">
-        <SokolLoader />
-      </div>
-    );
-
+  // ... (useEffect pro fetchInitialData - ten máš víceméně dobře)
+  
+  // POZOR: V returnu musíš změnit props pro Mapu:
   return (
     <main className="h-screen w-full flex flex-col overflow-hidden text-slate-900">
       <div className="p-4 bg-white shadow-md flex justify-between items-center z-50">
@@ -251,7 +175,7 @@ export default function MapPage() {
           </span>
         </span>
         <Button
-          onClick={() => setIsTracking(!isTracking)}
+          onClick={handleToggleTracking}
           variant={"secondary"}
           size={"lg"}
           className={`px-8 h-12 py-4 rounded-full font-bold text-lg text-white uppercase transition-all shadow-lg ${
@@ -272,7 +196,7 @@ export default function MapPage() {
           <MapWithNoSSR
             routeCoordinates={route}
             userLocation={userLocation}
-            userPathWithDist={userPath}
+            segments={segments}
           />
         )}
       </div>
