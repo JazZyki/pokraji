@@ -181,23 +181,23 @@ export default function MapPage() {
   }, []);
 
   useEffect(() => {
-  let wakeLock: WakeLockSentinel | null = null;
-  const requestWakeLock = async () => {
-    try {
-      if ("wakeLock" in navigator) {
-        wakeLock = await navigator.wakeLock.request("screen");
+    let wakeLock: WakeLockSentinel | null = null;
+    const requestWakeLock = async () => {
+      try {
+        if ("wakeLock" in navigator) {
+          wakeLock = await navigator.wakeLock.request("screen");
+        }
+      } catch (err) {
+        console.error("WakeLock failed", err);
       }
-    } catch (err) {
-      console.error("WakeLock failed", err);
-    }
-  };
+    };
 
-  if (isTracking) requestWakeLock();
+    if (isTracking) requestWakeLock();
 
-  return () => {
-    if (wakeLock) wakeLock.release();
-  };
-}, [isTracking]);
+    return () => {
+      if (wakeLock) wakeLock.release();
+    };
+  }, [isTracking]);
 
   // Funkce pro odeslání polohy
   const saveLocation = useCallback(async (lat: number, lon: number) => {
@@ -240,87 +240,89 @@ export default function MapPage() {
   const handleToggleTracking = () => {
     if (!isTracking) {
       const newSessionId = crypto.randomUUID();
-      localStorage.setItem("current_session_id", newSessionId);
+      localStorage.setItem("current_session_id", newSessionId); // Zápis
       setSegments((prev) => [...prev, { points: [] }]);
       setIsTracking(true);
-      setDebugMsg("🛰️ Vyhledávám signál...");
+      isTrackingRef.current = true; // Okamžitá aktualizace Refu
+      setDebugMsg("🛰️ Startuji GPS...");
     } else {
       localStorage.removeItem("current_session_id");
       setIsTracking(false);
+      isTrackingRef.current = false;
       setDebugMsg("Trasa ukončena");
     }
   };
 
   // Watch Position (GPS)
   // 2. UPRAVENÝ GPS EFFECT
-useEffect(() => {
+  useEffect(() => {
   if (!("geolocation" in navigator)) return;
 
   const watchId = navigator.geolocation.watchPosition(
     async (pos) => {
       const { latitude, longitude, accuracy } = pos.coords;
-      
-      // Vždy aktualizujeme polohu na mapě (modrá tečka)
       setUserLocation([latitude, longitude]);
 
-      // Kontrola, zda chceme trackovat (přes Ref)
       if (!isTrackingRef.current) return;
 
-      // FILTR PŘESNOSTI - Pokud je moc špatná, neukládáme bod, ale nezastavíme efekt
-      if (accuracy > 100) {
-        setDebugMsg(`Slabý signál (${Math.round(accuracy)}m)`);
+      // ZMÍRNĚNÍ PODMÍNKY: Pokud ladíš, dej sem klidně 300, ať vidíš, že to běží
+      if (accuracy > 150) {
+        setDebugMsg(`Slabý signál: ${Math.round(accuracy)}m`);
         return;
       }
 
-      // KONTROLA POI (Zůstává stejná)
-      for (const poi of poiPoints) {
-        const distToPoi = calculateDistance(latitude, longitude, poi.lat, poi.lon) * 1000;
-        if (distToPoi <= 60) {
-          const teamId = localStorage.getItem("knin_team_id");
-          if (teamId) {
-            const { error } = await supabase
-              .from("team_poi_progress")
-              .insert({ team_id: teamId, poi_id: poi.id });
-            
-            if (!error) {
-              setUnlockedIds((prev) => new Set([...prev, poi.id]));
-            }
+      setDebugMsg("✅ Sleduji a ukládám...");
+
+      // Logika uložení
+      const teamId = localStorage.getItem("knin_team_id");
+      const sId = localStorage.getItem("current_session_id");
+
+      if (teamId && sId) {
+        let shouldSave = false;
+        if (!lastSavedPos.current) {
+          shouldSave = true;
+        } else {
+          const d = calculateDistance(
+            lastSavedPos.current.lat,
+            lastSavedPos.current.lon,
+            latitude,
+            longitude
+          ) * 1000;
+          if (d >= 10) shouldSave = true;
+        }
+
+        if (shouldSave) {
+          // Voláme přímo RPC přes Supabase pro test, zda to projde
+          const { data, error } = await supabase.rpc("track_team_location", {
+            t_id: teamId,
+            lat_val: latitude,
+            lon_val: longitude,
+            s_id: sId,
+          });
+
+          if (!error && data) {
+            lastSavedPos.current = { lat: latitude, lon: longitude };
+            // Aktualizace stavu pro mapu
+            const newPoint: TrackPoint = { coords: [latitude, longitude] as [number, number], dist: data.dist, sessionId: sId };
+            setSegments(prev => {
+               const copy = [...prev];
+               if (copy.length > 0) {
+                 copy[copy.length - 1].points.push(newPoint);
+               }
+               return copy;
+            });
+          } else if (error) {
+            setDebugMsg(`❌ DB Chyba: ${error.message}`);
           }
         }
       }
-
-      // LOGIKA UKLÁDÁNÍ
-      let shouldSave = false;
-      if (!lastSavedPos.current) {
-        shouldSave = true;
-      } else {
-        const d = calculateDistance(
-          lastSavedPos.current.lat,
-          lastSavedPos.current.lon,
-          latitude,
-          longitude
-        ) * 1000;
-
-        // Tady byla možná zrada - snížil jsem limit pro jistotu
-        if (d >= 10) shouldSave = true; 
-      }
-
-      if (shouldSave) {
-        // Zavoláme saveLocation a počkáme na výsledek
-        saveLocation(latitude, longitude);
-        lastSavedPos.current = { lat: latitude, lon: longitude };
-      }
     },
     (err) => setDebugMsg(`❌ GPS Error: ${err.message}`),
-    { 
-      enableHighAccuracy: true, 
-      timeout: 15000, // Zvýšil jsem timeout
-      maximumAge: 0 
-    }
+    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
   );
 
   return () => navigator.geolocation.clearWatch(watchId);
-}, [poiPoints, saveLocation]); // Důležité závislosti
+}, [poiPoints]); // ODEBRÁNO saveLocation ze závislostí!
 
   if (loading)
     return (
