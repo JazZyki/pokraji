@@ -237,13 +237,14 @@ export default function MapPage() {
   // GPS spustíme hned, ale reagovat na body budeme jen přes Ref
   const watchId = navigator.geolocation.watchPosition(
     async (pos) => {
-      // DŮLEŽITÉ: Pokud uživatel nezapl tracking, nic neděláme, 
-      // ale spojení s GPS držíme otevřené a stabilní
+      // 1. Pokud uživatel neklikl na "Začít trasu", jen aktualizujeme modrou tečku
+      const { latitude, longitude, accuracy } = pos.coords;
+      setUserLocation([latitude, longitude]);
+
+      // 2. Pokud není tracking aktivní (přes REF!), končíme zde
       if (!isTrackingRef.current) return;
 
-      const { latitude, longitude, accuracy } = pos.coords;
-
-      // Logika pro přesnost (tolerantní start)
+      // 3. Logika pro přesnost
       const isFirstPoint = !lastSavedPos.current;
       const maxAcc = isFirstPoint ? 200 : 80;
 
@@ -252,9 +253,8 @@ export default function MapPage() {
         return;
       }
 
-      // Aktualizace UI polohy
-      setUserLocation([latitude, longitude]);
-      setDebugMsg("✅ Signál OK");
+      // 4. Pokud jsme tady, tracking běží a signál je OK
+      setDebugMsg("✅ Sleduji trasu...");
 
       // --- KONTROLA POI ---
       for (const poi of poiPoints) {
@@ -281,16 +281,17 @@ export default function MapPage() {
       if (!lastSavedPos.current) {
         shouldSave = true;
       } else {
-        const d = Math.sqrt(
-          Math.pow(latitude - lastSavedPos.current.lat, 2) +
-          Math.pow(longitude - lastSavedPos.current.lon, 2)
-        );
-        // Cca 8-10 metrů
-        if (d > 0.00008) shouldSave = true;
+        const d = calculateDistance(
+            lastSavedPos.current.lat, 
+            lastSavedPos.current.lon, 
+            latitude, 
+            longitude
+        ) * 1000; // vzdálenost v metrech
+
+        if (d > 10) shouldSave = true; // Uložit každých 10 metrů
       }
 
       if (shouldSave) {
-        console.log("Ukládám bod do DB...");
         saveLocation(latitude, longitude);
         lastSavedPos.current = { lat: latitude, lon: longitude };
       }
@@ -300,8 +301,7 @@ export default function MapPage() {
   );
 
   return () => navigator.geolocation.clearWatch(watchId);
-  // ODEBRÁNO isTracking a saveLocation ze závislostí
-}, [poiPoints, saveLocation]);
+}, [poiPoints, saveLocation]); // Přidáno saveLocation, aby byla funkce čerstvá
 
   if (loading)
     return (

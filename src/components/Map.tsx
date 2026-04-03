@@ -8,22 +8,19 @@ import {
   Circle,
   useMap,
 } from "react-leaflet";
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { Tooltip } from "react-leaflet";
 
 function MapRecenter({ location }: { location: [number, number] | null }) {
   const map = useMap();
-  const hasCenteredGPS = useRef(false); // Sleduje, jestli jsme už zafocusovali na živou polohu
 
   useEffect(() => {
-    if (location && !hasCenteredGPS.current) {
-      map.flyTo(location, 17, {
+    if (location) {
+      // Mapa se plynule přesune na každou novou pozici z GPS
+      map.flyTo(location, map.getZoom(), { 
         animate: true,
-        duration: 1.5, // délka animace v sekundách
+        duration: 0.5 
       });
-
-      // Nastavíme na true, aby nás to neházelo zpět, když se budeme hýbat
-      hasCenteredGPS.current = true;
     }
   }, [location, map]);
 
