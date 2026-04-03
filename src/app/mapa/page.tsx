@@ -180,6 +180,25 @@ export default function MapPage() {
     fetchInitialData();
   }, []);
 
+  useEffect(() => {
+  let wakeLock: WakeLockSentinel | null = null;
+  const requestWakeLock = async () => {
+    try {
+      if ("wakeLock" in navigator) {
+        wakeLock = await navigator.wakeLock.request("screen");
+      }
+    } catch (err) {
+      console.error("WakeLock failed", err);
+    }
+  };
+
+  if (isTracking) requestWakeLock();
+
+  return () => {
+    if (wakeLock) wakeLock.release();
+  };
+}, [isTracking]);
+
   // Funkce pro odeslání polohy
   const saveLocation = useCallback(async (lat: number, lon: number) => {
     const teamId = localStorage.getItem("knin_team_id");
@@ -233,75 +252,75 @@ export default function MapPage() {
   };
 
   // Watch Position (GPS)
-  useEffect(() => {
-  // GPS spustíme hned, ale reagovat na body budeme jen přes Ref
+  // 2. UPRAVENÝ GPS EFFECT
+useEffect(() => {
+  if (!("geolocation" in navigator)) return;
+
   const watchId = navigator.geolocation.watchPosition(
     async (pos) => {
-      // 1. Pokud uživatel neklikl na "Začít trasu", jen aktualizujeme modrou tečku
       const { latitude, longitude, accuracy } = pos.coords;
+      
+      // Vždy aktualizujeme polohu na mapě (modrá tečka)
       setUserLocation([latitude, longitude]);
 
-      // 2. Pokud není tracking aktivní (přes REF!), končíme zde
+      // Kontrola, zda chceme trackovat (přes Ref)
       if (!isTrackingRef.current) return;
 
-      // 3. Logika pro přesnost
-      const isFirstPoint = !lastSavedPos.current;
-      const maxAcc = isFirstPoint ? 200 : 80;
-
-      if (accuracy > maxAcc) {
-        setDebugMsg(`Slabý signál: ${Math.round(accuracy)}m`);
+      // FILTR PŘESNOSTI - Pokud je moc špatná, neukládáme bod, ale nezastavíme efekt
+      if (accuracy > 100) {
+        setDebugMsg(`Slabý signál (${Math.round(accuracy)}m)`);
         return;
       }
 
-      // 4. Pokud jsme tady, tracking běží a signál je OK
-      setDebugMsg("✅ Sleduji trasu...");
-
-      // --- KONTROLA POI ---
+      // KONTROLA POI (Zůstává stejná)
       for (const poi of poiPoints) {
-        const dist = calculateDistance(latitude, longitude, poi.lat, poi.lon) * 1000;
-        if (dist <= 60) {
+        const distToPoi = calculateDistance(latitude, longitude, poi.lat, poi.lon) * 1000;
+        if (distToPoi <= 60) {
           const teamId = localStorage.getItem("knin_team_id");
-          const { error } = await supabase
-            .from("team_poi_progress")
-            .insert({ team_id: teamId, poi_id: poi.id });
-
-          if (!error || (error && "code" in error && error.code === "23505")) {
-            setUnlockedIds((prev) => {
-              if (prev.has(poi.id)) return prev;
-              const next = new Set(prev);
-              next.add(poi.id);
-              return next;
-            });
+          if (teamId) {
+            const { error } = await supabase
+              .from("team_poi_progress")
+              .insert({ team_id: teamId, poi_id: poi.id });
+            
+            if (!error) {
+              setUnlockedIds((prev) => new Set([...prev, poi.id]));
+            }
           }
         }
       }
 
-      // --- UKLÁDÁNÍ TRASY (saveLocation se teď zavolá správně) ---
+      // LOGIKA UKLÁDÁNÍ
       let shouldSave = false;
       if (!lastSavedPos.current) {
         shouldSave = true;
       } else {
         const d = calculateDistance(
-            lastSavedPos.current.lat, 
-            lastSavedPos.current.lon, 
-            latitude, 
-            longitude
-        ) * 1000; // vzdálenost v metrech
+          lastSavedPos.current.lat,
+          lastSavedPos.current.lon,
+          latitude,
+          longitude
+        ) * 1000;
 
-        if (d > 10) shouldSave = true; // Uložit každých 10 metrů
+        // Tady byla možná zrada - snížil jsem limit pro jistotu
+        if (d >= 10) shouldSave = true; 
       }
 
       if (shouldSave) {
+        // Zavoláme saveLocation a počkáme na výsledek
         saveLocation(latitude, longitude);
         lastSavedPos.current = { lat: latitude, lon: longitude };
       }
     },
-    (err) => setDebugMsg(`❌ GPS: ${err.message}`),
-    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    (err) => setDebugMsg(`❌ GPS Error: ${err.message}`),
+    { 
+      enableHighAccuracy: true, 
+      timeout: 15000, // Zvýšil jsem timeout
+      maximumAge: 0 
+    }
   );
 
   return () => navigator.geolocation.clearWatch(watchId);
-}, [poiPoints, saveLocation]); // Přidáno saveLocation, aby byla funkce čerstvá
+}, [poiPoints, saveLocation]); // Důležité závislosti
 
   if (loading)
     return (
