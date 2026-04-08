@@ -10,19 +10,44 @@ import {
 } from "react-leaflet";
 import { useEffect } from "react";
 import { Tooltip } from "react-leaflet";
+import { Target } from "lucide-react";
 
-function MapRecenter({ location }: { location: [number, number] | null }) {
+function ManualCenterButton({ location }: { location: [number, number] | null }) {
+  const map = useMap();
+
+  const handleManualCenter = () => {
+    if (location) {
+      map.flyTo(location, 16, { animate: true });
+    } else {
+      alert("Čekám na GPS signál...");
+    }
+  };
+
+  return (
+    <div className="absolute bottom-20 right-6 z-[1000]">
+      <button
+        onClick={handleManualCenter}
+        className="bg-white p-3 rounded-full shadow-2xl border-2 border-primary text-primary active:bg-slate-100 transition-colors"
+        title="Centrovat na moji polohu"
+      >
+        <Target className="size-6" />
+      </button>
+    </div>
+  );
+}
+
+function MapRecenter({ location, isTracking }: { location: [number, number] | null; isTracking: boolean }) {
   const map = useMap();
 
   useEffect(() => {
-    if (location) {
+    if (isTracking && location) {
       // Mapa se plynule přesune na každou novou pozici z GPS
       map.flyTo(location, map.getZoom(), { 
         animate: true,
         duration: 0.5 
       });
     }
-  }, [location, map]);
+  }, [location, map, isTracking]);
 
   return null;
 }
@@ -45,6 +70,7 @@ interface MapProps {
   poiPoints?: PoiPoint[]; // Přidáno
   unlockedIds?: Set<string>; // Přidáno
   onPoiClick?: (poi: PoiPoint) => void; // Přidáno pro callback při kliknutí na POI
+  isTracking?: boolean; // Přidáno
 }
 
 interface TrackPoint {
@@ -66,7 +92,8 @@ export default function Map({
   poiPoints = [], // Přidáno
   unlockedIds = new Set(), // Přidáno
   onPoiClick = () => {}, // Přidáno
-}: MapProps) {
+  isTracking = false, // Přidáno
+}: MapProps & { isTracking: boolean }) {
   const apiKey = process.env.NEXT_PUBLIC_MAPY_API_KEY;
 
   return (
@@ -127,7 +154,8 @@ export default function Map({
         </div>
       ))}
 
-      <MapRecenter location={userLocation} />
+      <MapRecenter location={userLocation} isTracking={isTracking} />
+      <ManualCenterButton location={userLocation} />
 
       {userLocation && (
         <Circle

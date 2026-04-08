@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { GpxImport } from "@/components/GpxImport";
 import { PoiModal } from "@/components/PoiModal";
+import { useRouter } from "next/navigation";
 
 const MapWithNoSSR = dynamic(() => import("@/components/Map"), {
   ssr: false,
@@ -43,6 +44,7 @@ interface TrackPoint {
   coords: [number, number];
   dist: number;
   sessionId?: string;
+  created_at?: string;
 }
 
 interface TrackSegment {
@@ -75,9 +77,31 @@ export default function MapPage() {
   const [unlockedIds, setUnlockedIds] = useState<Set<string>>(new Set());
   const [selectedPoi, setSelectedPoi] = useState<PoiPoint | null>(null);
   const isTrackingRef = useRef(isTracking);
+  const router = useRouter();
+  const [elapsedTime, setElapsedTime] = useState(0);
   useEffect(() => {
     isTrackingRef.current = isTracking;
   }, [isTracking]);
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+
+    if (isTracking) {
+      interval = setInterval(() => {
+        setElapsedTime((prev) => prev + 1);
+      }, 1000);
+    }
+
+    return () => clearInterval(interval);
+  }, [isTracking]);
+
+  // Pomocná funkce pro formátování času (HH:MM:SS)
+  const formatTime = (seconds: number) => {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = seconds % 60;
+    return [h, m, s].map((v) => v.toString().padStart(2, "0")).join(":");
+  };
 
   // Výpočet celkové vzdálenosti
   const totalDistance = segments.reduce((acc, segment) => {
@@ -99,6 +123,11 @@ export default function MapPage() {
 
   // Načtení historických dat
   useEffect(() => {
+    const teamId = localStorage.getItem("knin_team_id");
+    if (!teamId) {
+      router.push("/");
+      return;
+    }
     const fetchInitialData = async () => {
       try {
         const teamId = localStorage.getItem("knin_team_id");
@@ -118,7 +147,9 @@ export default function MapPage() {
         // 2. Načtení historie tras týmu
         const { data: history, error: histError } = await supabase
           .from("team_tracking")
-          .select("lat_val, lon_val, distance_from_route, session_id")
+          .select(
+            "lat_val, lon_val, distance_from_route, session_id, created_at",
+          )
           .eq("team_id", teamId)
           .order("created_at", { ascending: true });
 
@@ -131,6 +162,7 @@ export default function MapPage() {
                 coords: [h.lat_val, h.lon_val],
                 dist: h.distance_from_route || 0,
                 sessionId: sId,
+                created_at: h.created_at,
               });
               return acc;
             },
@@ -159,15 +191,36 @@ export default function MapPage() {
           }
 
           // 4. Načtení progresu týmu (přidej toto):
-          const { data: progress } = await supabase
+          const { data: progress, error: progressError } = await supabase
             .from("team_poi_progress")
             .select("poi_id")
             .eq("team_id", teamId);
 
+          if (progressError) {
+            setDebugMsg(`❌ Chyba načítání POI: ${progressError.message}`);
+          }
+
           if (progress) {
-            const ids = new Set(progress.map((p) => p.poi_id));
+            console.log("Načtené POI z DB:", progress);
+            const ids = new Set(progress.map((p) => String(p.poi_id))); // Jistota stringu
             setUnlockedIds(ids);
           }
+
+          let totalSecondsFromHistory = 0;
+
+          Object.values(grouped).forEach((points: TrackPoint[]) => {
+            if (points.length > 1) {
+              // Předpokládáme, že body mají property 'created_at' z DB
+              // Pokud ji nemáš v interface TrackPoint, přidej ji tam.
+              const start = new Date(points[0].created_at || "").getTime();
+              const end = new Date(
+                points[points.length - 1].created_at || "",
+              ).getTime();
+              totalSecondsFromHistory += Math.floor((end - start) / 1000);
+            }
+          });
+
+          setElapsedTime(totalSecondsFromHistory);
         }
         setDebugMsg("GPS připravena");
       } catch {
@@ -178,7 +231,18 @@ export default function MapPage() {
     };
 
     fetchInitialData();
-  }, []);
+  }, [router]);
+
+  const calculatePace = () => {
+            if (totalDistance === 0 || elapsedTime === 0) return "--:--";
+
+            // Celkový čas v minutách děleno vzdáleností
+            const paceDecimal = elapsedTime / 60 / totalDistance;
+            const mins = Math.floor(paceDecimal);
+            const secs = Math.round((paceDecimal - mins) * 60);
+
+            return `${mins}:${secs.toString().padStart(2, "0")}`;
+          };
 
   useEffect(() => {
     let wakeLock: WakeLockSentinel | null = null;
@@ -256,73 +320,106 @@ export default function MapPage() {
   // Watch Position (GPS)
   // 2. UPRAVENÝ GPS EFFECT
   useEffect(() => {
-  if (!("geolocation" in navigator)) return;
+    if (!("geolocation" in navigator)) return;
 
-  const watchId = navigator.geolocation.watchPosition(
-    async (pos) => {
-      const { latitude, longitude, accuracy } = pos.coords;
-      setUserLocation([latitude, longitude]);
+    const watchId = navigator.geolocation.watchPosition(
+      async (pos) => {
+        const { latitude, longitude, accuracy } = pos.coords;
+        setUserLocation([latitude, longitude]);
 
-      if (!isTrackingRef.current) return;
+        if (poiPoints.length > 0) {
+          for (const poi of poiPoints) {
+            // Pokud už je v Setu (odemčený), přeskočíme ho
+            if (unlockedIds.has(String(poi.id))) continue;
 
-      // ZMÍRNĚNÍ PODMÍNKY: Pokud ladíš, dej sem klidně 300, ať vidíš, že to běží
-      if (accuracy > 150) {
-        setDebugMsg(`Slabý signál: ${Math.round(accuracy)}m`);
-        return;
-      }
+            const distToPoi =
+              calculateDistance(latitude, longitude, poi.lat, poi.lon) * 1000;
 
-      setDebugMsg("✅ Sleduji a ukládám...");
+            // Tolerance 100 metrů pro spolehlivost v terénu
+            if (distToPoi <= 100) {
+              const teamId = localStorage.getItem("knin_team_id");
+              if (teamId) {
+                const { error } = await supabase
+                  .from("team_poi_progress")
+                  .insert({ team_id: teamId, poi_id: poi.id });
 
-      // Logika uložení
-      const teamId = localStorage.getItem("knin_team_id");
-      const sId = localStorage.getItem("current_session_id");
-
-      if (teamId && sId) {
-        let shouldSave = false;
-        if (!lastSavedPos.current) {
-          shouldSave = true;
-        } else {
-          const d = calculateDistance(
-            lastSavedPos.current.lat,
-            lastSavedPos.current.lon,
-            latitude,
-            longitude
-          ) * 1000;
-          if (d >= 10) shouldSave = true;
-        }
-
-        if (shouldSave) {
-          // Voláme přímo RPC přes Supabase pro test, zda to projde
-          const { data, error } = await supabase.rpc("track_team_location", {
-            t_id: teamId,
-            lat_val: latitude,
-            lon_val: longitude,
-            s_id: sId,
-          });
-
-          if (!error && data) {
-            lastSavedPos.current = { lat: latitude, lon: longitude };
-            // Aktualizace stavu pro mapu
-            const newPoint: TrackPoint = { coords: [latitude, longitude] as [number, number], dist: data.dist, sessionId: sId };
-            setSegments(prev => {
-               const copy = [...prev];
-               if (copy.length > 0) {
-                 copy[copy.length - 1].points.push(newPoint);
-               }
-               return copy;
-            });
-          } else if (error) {
-            setDebugMsg(`❌ DB Chyba: ${error.message}`);
+                // Pokud insert projde (nebo už tam je - code 23505), odemkneme v aplikaci
+                if (!error || (error && error.code === "23505")) {
+                  setUnlockedIds((prev) => new Set([...prev, String(poi.id)]));
+                  setDebugMsg(`🌟 BOD ODEMČEN: ${poi.name}`);
+                } else {
+                  console.error("Chyba při ukládání POI:", error);
+                }
+              }
+            }
           }
         }
-      }
-    },
-    (err) => setDebugMsg(`❌ GPS Error: ${err.message}`),
-    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-  );
 
-  return () => navigator.geolocation.clearWatch(watchId);
-}, [poiPoints]); // ODEBRÁNO saveLocation ze závislostí!
+        if (!isTrackingRef.current) return;
+
+        // ZMÍRNĚNÍ PODMÍNKY: Pokud ladíš, dej sem klidně 300, ať vidíš, že to běží
+        if (accuracy > 150) {
+          setDebugMsg(`Slabý signál: ${Math.round(accuracy)}m`);
+          return;
+        }
+
+        setDebugMsg("✅ Sleduji a ukládám...");
+
+        // Logika uložení
+        const teamId = localStorage.getItem("knin_team_id");
+        const sId = localStorage.getItem("current_session_id");
+
+        if (teamId && sId) {
+          let shouldSave = false;
+          if (!lastSavedPos.current) {
+            shouldSave = true;
+          } else {
+            const d =
+              calculateDistance(
+                lastSavedPos.current.lat,
+                lastSavedPos.current.lon,
+                latitude,
+                longitude,
+              ) * 1000;
+            if (d >= 10) shouldSave = true;
+          }
+
+          if (shouldSave) {
+            // Voláme přímo RPC přes Supabase pro test, zda to projde
+            const { data, error } = await supabase.rpc("track_team_location", {
+              t_id: teamId,
+              lat_val: latitude,
+              lon_val: longitude,
+              s_id: sId,
+            });
+
+            if (!error && data) {
+              lastSavedPos.current = { lat: latitude, lon: longitude };
+              // Aktualizace stavu pro mapu
+              const newPoint: TrackPoint = {
+                coords: [latitude, longitude] as [number, number],
+                dist: data.dist,
+                sessionId: sId,
+              };
+              setSegments((prev) => {
+                const copy = [...prev];
+                if (copy.length > 0) {
+                  copy[copy.length - 1].points.push(newPoint);
+                }
+                return copy;
+              });
+            } else if (error) {
+              setDebugMsg(`❌ DB Chyba: ${error.message}`);
+            }
+          }
+        }
+      },
+      (err) => setDebugMsg(`❌ GPS Error: ${err.message}`),
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
+    );
+
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, [poiPoints, unlockedIds]); // ODEBRÁNO saveLocation ze závislostí!
 
   if (loading)
     return (
@@ -358,21 +455,45 @@ export default function MapPage() {
       </div>
 
       {/* Info bar */}
-      <div className="flex justify-between items-center bg-white p-3 border-t-2 border-primary">
-        <div className="flex flex-col">
-          <span className="text-xs font-bold text-slate-400 uppercase">
-            Vzdálenost
-          </span>
-          <span className="text-3xl font-bold text-primary">
-            {totalDistance.toFixed(2)} km
-          </span>
+      <div className="flex justify-between items-center bg-white p-3 border-t-2 border-primary shadow-inner">
+        <div className="flex gap-4 sm:gap-8">
+          {/* Vzdálenost */}
+          <div className="flex flex-col">
+            <span className="text-[10px] font-bold text-slate-400 uppercase leading-none mb-1">
+              Vzdálenost
+            </span>
+            <span className="text-xl font-bold text-primary leading-none">
+              {totalDistance.toFixed(2)} <span className="text-xs">km</span>
+            </span>
+          </div>
+
+          {/* Čas */}
+          <div className="flex flex-col border-l border-slate-200 pl-4">
+            <span className="text-[10px] font-bold text-slate-400 uppercase leading-none mb-1">
+              Čistý čas
+            </span>
+            <span className="text-xl font-bold text-slate-700 leading-none font-mono">
+              {formatTime(elapsedTime)}
+            </span>
+          </div>
+
+          {/* Tempo */}
+          <div className="flex flex-col border-l border-slate-200 pl-4 hidden xs:flex">
+            <span className="text-[10px] font-bold text-slate-400 uppercase leading-none mb-1">
+              Tempo
+            </span>
+            <span className="text-xl font-bold text-slate-700 leading-none font-mono">
+              {calculatePace()} <span className="text-xs">min/km</span>
+            </span>
+          </div>
         </div>
+
         <Button
           onClick={handleToggleTracking}
           variant={isTracking ? "destructive" : "secondary"}
-          className="px-8 h-12 rounded-full font-bold shadow-lg uppercase"
+          className="px-6 h-10 rounded-full font-bold shadow-md uppercase text-xs"
         >
-          {isTracking ? "Ukončit trasu" : "Začít trasu"}
+          {isTracking ? "Pauza" : "Pokračovat"}
         </Button>
       </div>
 
@@ -396,6 +517,7 @@ export default function MapPage() {
           poiPoints={poiPoints}
           unlockedIds={unlockedIds}
           onPoiClick={(poi) => setSelectedPoi(poi)}
+          isTracking={isTracking}
         />
       </div>
     </main>

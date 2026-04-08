@@ -110,7 +110,7 @@ export default function RegisterPage() {
     return () =>
       window.removeEventListener(
         "beforeinstallprompt",
-        handleBeforeInstallPrompt
+        handleBeforeInstallPrompt,
       );
   }, []);
 
@@ -124,7 +124,7 @@ export default function RegisterPage() {
       }
     } else {
       alert(
-        "Pro instalaci na iPhone: Klikněte na tlačítko sdílení (čtvereček s šipkou nahoru) a vyberte 'Přidat na plochu'."
+        "Pro instalaci na iPhone: Klikněte na tlačítko sdílení (čtvereček s šipkou nahoru) a vyberte 'Přidat na plochu'.",
       );
     }
   };
@@ -212,7 +212,8 @@ export default function RegisterPage() {
                 <Button
                   onClick={() => router.push("/mapa")}
                   variant={"secondary"}
-                  size={"lgx"}
+                  size={"lg"} // Opraveno z lgx
+                  className="w-full gap-2"
                 >
                   <MapIcon className="size-5" /> VSTOUPIT DO MAPY
                 </Button>
@@ -281,11 +282,14 @@ export default function RegisterPage() {
 
                 <Button
                   disabled={loading}
-                  /*className="flex items-center justify-center gap-2 w-full bg-secondary text-white font-bold py-4 rounded-xl transition shadow-lg"*/
+                  type="submit" // KLÍČOVÉ: Zajistí spuštění onSubmit formuláře
                   variant={"secondary"}
-                  size={"lgx"}
+                  size={"lg"} // Změněno z lgx na lg (pokud nemáš lgx definované v button.tsx)
+                  className="w-full gap-2" // Přidáno pro jistotu šířky a mezery mezi ikonou a textem
                 >
-                  {mode === "register" ? (
+                  {loading ? (
+                    <SokolLoader /> // Nebo jen text "Načítám..."
+                  ) : mode === "register" ? (
                     <>
                       <Play className="size-5" /> START DOBRODRUŽSTVÍ
                     </>
