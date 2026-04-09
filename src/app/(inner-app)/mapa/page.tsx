@@ -3,7 +3,6 @@
 import dynamic from "next/dynamic";
 import { useEffect, useState, useCallback, useRef } from "react";
 import { supabase } from "@/lib/supabase";
-import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { SokolLoader } from "@/components/SokolLoader";
 import {
@@ -430,30 +429,6 @@ export default function MapPage() {
 
   return (
     <main className="h-screen w-full flex flex-col overflow-hidden">
-      {/* Header */}
-      <div className="p-4 bg-white shadow-md flex justify-between items-center z-50">
-        <Image
-          src="/pokraji_logo.png"
-          alt="Logo"
-          width={200}
-          height={100}
-          priority
-        />
-        <DropdownMenu>
-          <DropdownMenuTrigger className="px-4 py-2 border rounded-md shadow-sm">
-            Menu
-          </DropdownMenuTrigger>
-          <DropdownMenuContent>
-            <DropdownMenuItem onClick={() => window.location.reload()}>
-              Obnovit mapu
-            </DropdownMenuItem>
-
-            {/* GpxImport už v sobě má div, který se v MenuItemu bude chovat správně */}
-            <GpxImport onImportComplete={() => window.location.reload()} />
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-
       {/* Info bar */}
       <div className="flex justify-between items-center bg-white p-3 border-t-2 border-primary shadow-inner">
         <div className="flex gap-4 sm:gap-8">

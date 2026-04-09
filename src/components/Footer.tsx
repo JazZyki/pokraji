@@ -2,7 +2,7 @@ import Link from "next/link";
 
 export function Footer() {
   return (
-    <footer className="absolute bottom-0 w-full bg-secondary text-white text-center p-4 mt-8">
+    <footer className="fixed bottom-0 w-full bg-secondary text-white text-center p-4 mt-8">
       <p className="text-sm">
         &copy; {new Date().getFullYear()} PoKraji. Všechna práva vyhrazena.
       </p>
