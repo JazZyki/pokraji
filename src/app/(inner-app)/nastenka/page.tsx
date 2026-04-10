@@ -2,17 +2,10 @@
 
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabase";
-import {
-  MessageSquare,
-  Camera,
-  Send,
-  AlertTriangle,
-  Info,
-  Image as ImageIcon,
-  Loader2,
-} from "lucide-react";
+import { Camera, Send, Image as ImageIcon, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import imageCompression from "browser-image-compression";
+import Image from "next/image";
 
 interface TeamComment {
   id: string;
@@ -126,25 +119,25 @@ export default function NastenkaPage() {
   }, []);
 
   useEffect(() => {
-  // Označíme čas návštěvy pro notifikační tečku v menu
-  localStorage.setItem("nastenka_last_seen", new Date().toISOString());
-}, []);
+    // Označíme čas návštěvy pro notifikační tečku v menu
+    localStorage.setItem("nastenka_last_seen", new Date().toISOString());
+  }, []);
 
   return (
-    <div className="flex flex-col h-full bg-slate-50">
+    <div className="flex flex-col h-full">
       {/* SEZNAM ZPRÁV */}
-      <div className="flex-grow overflow-y-auto p-4 space-y-4 pb-32">
+      <div className="grow overflow-y-auto p-4 space-y-4 pb-32">
         {comments.map((c) => {
           const isMe = c.team_id === myTeamId;
 
           return (
             <div
               key={c.id}
-              className={`max-w-[85%] p-4 rounded-2xl shadow-sm flex flex-col ${
+              className={`max-w-[85%] p-4 rounded-2xl shadow-sm flex flex-col bg-background-2 ${
                 isMe
-                  ? "ml-auto bg-primary/10 border-r-4 border-r-primary rounded-tr-none"
-                  : "mr-auto bg-white border-l-4 border-l-slate-400 rounded-tl-none"
-              } ${c.type === "warning" ? "border-l-red-500 bg-red-50" : ""}`}
+                  ? "ml-auto border-r-4 border-r-primary rounded-tr-none"
+                  : "mr-auto border-l-4 border-l-slate-400 rounded-tl-none"
+              } `}
             >
               <div
                 className={`flex justify-between items-start mb-1 gap-4 ${isMe ? "flex-row-reverse" : "flex-row"}`}
@@ -165,17 +158,21 @@ export default function NastenkaPage() {
               </div>
 
               <p
-                className={`text-sm leading-relaxed ${isMe ? "text-right" : "text-left"}`}
+                className={`text-sm leading-relaxed mb-1 ${isMe ? "text-right" : "text-left"}`}
               >
                 {c.text}
               </p>
 
               {c.photo_url && (
                 <div className="mt-3 rounded-lg overflow-hidden border border-slate-200">
-                  <img
+                  <Image
                     src={c.photo_url}
                     alt="Foto z trasy"
-                    className="w-full h-auto"
+                    width={500}
+                    height={300}
+                    className="w-full h-auto object-cover"
+                    // sizes pomáhá prohlížeči vybrat správné rozlišení
+                    sizes="(max-width: 768px) 85vw, 500px"
                   />
                 </div>
               )}
@@ -185,14 +182,17 @@ export default function NastenkaPage() {
       </div>
 
       {/* FORMULÁŘ DOLE */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-lg border-t p-4 z-50">
+      <div className="fixed bottom-0 left-0 right-0 bg-background-2/50 backdrop-blur-lg border-t p-4 z-50">
         <div className="max-w-xl mx-auto space-y-3">
           <div className="flex gap-2 items-end">
-            <div className="flex-grow bg-slate-100 rounded-2xl p-2 border focus-within:ring-2 ring-primary">
+            <div className="grow bg-background-2 rounded-2xl p-2 border focus-within:ring-2 ring-primary">
               {tempPhotoUrl && (
                 <div className="mb-2 relative inline-block">
-                  <img
+                  <Image
                     src={tempPhotoUrl}
+                    alt="Náhled"
+                    width={64}
+                    height={64}
                     className="size-16 object-cover rounded-lg"
                   />
                   <button

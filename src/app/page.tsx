@@ -152,7 +152,7 @@ export default function RegisterPage() {
 
   if (loading)
     return (
-      <div className="h-screen w-full flex items-center justify-center bg-slate-50">
+      <div className="h-screen w-full flex items-center justify-center bg-background/70">
         <SokolLoader />
       </div>
     );

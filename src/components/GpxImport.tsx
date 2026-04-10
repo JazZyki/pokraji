@@ -78,8 +78,7 @@ export function GpxImport({ onImportComplete }: { onImportComplete: () => void }
   return (
     <>
     <label className="flex items-center w-full cursor-pointer py-1">
-      <Upload className="mr-2 h-4 w-4" />
-      <span>{uploading ? "Nahrávám..." : "Importovat GPX"}</span>
+      <span className="font-bold uppercase">{uploading ? "Nahrávám..." : "Importovat GPX"}</span>
       <input
         type="file"
         accept=".gpx"

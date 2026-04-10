@@ -11,6 +11,7 @@ import {
 import { useEffect } from "react";
 import { Tooltip } from "react-leaflet";
 import { Target } from "lucide-react";
+import { useTheme } from "next-themes";
 
 function ManualCenterButton({ location }: { location: [number, number] | null }) {
   const map = useMap();
@@ -24,7 +25,7 @@ function ManualCenterButton({ location }: { location: [number, number] | null })
   };
 
   return (
-    <div className="absolute bottom-20 right-6 z-[1000]">
+    <div className="absolute bottom-7 right-6 z-1000">
       <button
         onClick={handleManualCenter}
         className="bg-white p-3 rounded-full shadow-2xl border-2 border-primary text-primary active:bg-slate-100 transition-colors"
@@ -95,16 +96,20 @@ export default function Map({
   isTracking = false, // Přidáno
 }: MapProps & { isTracking: boolean }) {
   const apiKey = process.env.NEXT_PUBLIC_MAPY_API_KEY;
+  const { theme } = useTheme();
 
   return (
     <MapContainer
       center={[49.811, 14.295]}
       zoom={13}
-      style={{ height: "100%", width: "100%", zIndex: 0 }}
+      style={{ height: "calc(100% - 154px)", width: "100%", zIndex: 0, }}
     >
       <TileLayer
-        url={`https://api.mapy.cz/v1/maptiles/outdoor/256/{z}/{x}/{y}?apikey=${apiKey}`}
-        attribution="&copy; Seznam.cz"
+        url={theme === 'dark' 
+    ? `https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png`
+    : `https://api.mapy.cz/v1/maptiles/outdoor/256/{z}/{x}/{y}?apikey=${apiKey}`
+  }
+  attribution={theme === 'dark' ? '&copy; Stadia Maps' : '&copy; Seznam.cz'}
       />
 
       {/* Referenční trasa */}
@@ -128,9 +133,6 @@ export default function Map({
             click: () => onPoiClick(poi),
           }}
         >
-          <Tooltip permanent direction="top" offset={[0, -10]} opacity={0.8}>
-            {poi.name}
-          </Tooltip>
         </Circle>
       ))}
 

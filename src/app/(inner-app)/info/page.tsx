@@ -14,9 +14,8 @@ export default function InfoPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6 flex flex-col items-center">
-      <div className="max-w-2xl w-full bg-white rounded-2xl shadow-md p-8 space-y-6">
-        <h1 className="text-3xl font-bold text-primary flex items-center gap-2">
+    <div className="min-h-screen p-6 flex flex-col items-center">
+        <h1 className="w-full text-3xl font-bold text-def-text flex items-center justify-center gap-4 mb-6 border-b-2 border-def-text pb-2">
           <BookOpen className="size-8" /> Informace o soutěži
         </h1>
         
@@ -30,10 +29,13 @@ export default function InfoPage() {
           </ul>
         </div>
 
-        <Button onClick={handleGoToMap} className="w-full h-14 text-lg font-bold gap-2">
-          rozumím, přejít na mapu <MapIcon />
+        <Button 
+        variant="default"
+        size="lgx"
+        onClick={handleGoToMap} 
+        >
+          <MapIcon size={24} /> rozumím, přejít na mapu 
         </Button>
-      </div>
     </div>
   );
 }

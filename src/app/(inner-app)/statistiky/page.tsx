@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { Trophy, Clock, MapPin, Footprints, Calendar } from "lucide-react";
 import { SokolLoader } from "@/components/SokolLoader";
+import { PoiModal } from "@/components/PoiModal";
 
 interface SessionStats {
   id: string;
@@ -30,6 +31,20 @@ interface PoiProgress {
   poi_id: string;
   unlocked_at: string;
 }
+
+interface PoiData {
+  id: string;
+  name: string;
+  lat: number;
+  lon: number;
+  description?: string;
+}
+
+interface PoiStats extends PoiData {
+  isUnlocked: boolean;
+  unlockedAt: string | null;
+}
+
 function calculateDistance(
   lat1: number,
   lon1: number,
@@ -52,6 +67,7 @@ export default function StatsPage() {
   const [sessions, setSessions] = useState<SessionStats[]>([]);
   const [pois, setPois] = useState<PoiStats[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedPoi, setSelectedPoi] = useState<PoiStats | null>(null);
 
   useEffect(() => {
   const fetchStats = async () => {
@@ -63,7 +79,7 @@ export default function StatsPage() {
         return;
       }
 
-      // 1. Načtení historie a POI paralelně (rychlejší)
+      // 1. Načtení dat
       const [historyRes, poisRes, progressRes] = await Promise.all([
         supabase
           .from("team_tracking")
@@ -72,7 +88,7 @@ export default function StatsPage() {
           .order("created_at", { ascending: true }),
         supabase
           .from("poi_points")
-          .select("id, name"),
+          .select("id, name, lat, lon, description"),
         supabase
           .from("team_poi_progress")
           .select("poi_id, unlocked_at")
@@ -88,7 +104,7 @@ export default function StatsPage() {
           return acc;
         }, {});
 
-        const processedSessions = Object.entries(grouped).map(([id, points]: [string, TrackingPoint[]]) => {
+        const processedSessions = Object.entries(grouped).map(([id, points]) => {
           let dist = 0;
           for (let i = 1; i < points.length; i++) {
             dist += calculateDistance(
@@ -107,29 +123,41 @@ export default function StatsPage() {
             duration: Math.max(0, Math.floor((end.getTime() - start.getTime()) / 1000)),
             date: start.toLocaleDateString("cs-CZ"),
           };
-        }).filter(s => s.distance > 0.005); // Velmi malý filtr, aby se ukázalo skoro vše
+        }).filter(s => s.distance > 0.005);
 
-        setSessions(processedSessions.reverse());
+        setSessions(processedSessions.sort((a, b) => 
+          new Date(b.id === 'default' ? 0 : b.date.split('.').reverse().join('-')).getTime() - 
+          new Date(a.id === 'default' ? 0 : a.date.split('.').reverse().join('-')).getTime()
+        ));
       }
 
-      // 3. Zpracování POI (Sbírka)
+      // 3. Zpracování POI (Zásadní oprava mapování)
       if (poisRes.data) {
-        const progressMap = new Map(
-          (progressRes.data || []).map((p: PoiProgress) => [p.poi_id, p.unlocked_at])
-        );
+        // Vytvoříme Mapu se stringovými klíči pro jistotu
+        const progressMap = new Map();
+        if (progressRes.data) {
+          progressRes.data.forEach(p => {
+            progressMap.set(String(p.poi_id).toLowerCase(), p.unlocked_at);
+          });
+        }
 
-        setPois(poisRes.data.map((p: { id: string; name: string }) => ({
-          id: p.id,
-          name: p.name,
-          isUnlocked: progressMap.has(p.id),
-          unlockedAt: progressMap.get(p.id) || null,
-        })));
+        const mappedPois = poisRes.data.map((p) => {
+          const poiIdLower = String(p.id).toLowerCase();
+          const unlockedAt = progressMap.get(poiIdLower);
+          
+          return {
+            ...p,
+            isUnlocked: progressMap.has(poiIdLower),
+            unlockedAt: unlockedAt || null,
+          };
+        });
+
+        setPois(mappedPois);
       }
 
     } catch (err) {
-      console.error("Chyba při načítání statistik:", err);
+      console.error("Kritická chyba StatsPage:", err);
     } finally {
-      // TOTO MUSÍ BÝT TADY, aby se loader vypnul vždycky
       setLoading(false);
     }
   };
@@ -140,7 +168,7 @@ export default function StatsPage() {
   if (loading) return <SokolLoader />;
 
   return (
-    <div className="p-6 space-y-8 pb-20 bg-slate-50 min-h-full overflow-y-auto">
+    <div className="p-6 space-y-8 pb-20 min-h-full overflow-scroll h-[calc(100vh-18rem)]">
       {/* CELKOVÉ SHRNUTÍ */}
       <section className="grid grid-cols-2 gap-4">
         <div className="bg-primary text-white p-4 rounded-2xl shadow-lg">
@@ -150,10 +178,10 @@ export default function StatsPage() {
             {sessions.reduce((a, b) => a + b.distance, 0).toFixed(1)} km
           </p>
         </div>
-        <div className="bg-white p-4 rounded-2xl shadow-md border border-slate-100">
-          <Trophy className="mb-2 text-secondary" />
-          <p className="text-xs uppercase font-bold text-slate-400">Body</p>
-          <p className="text-2xl font-bold text-slate-700">
+        <div className="bg-secondary p-4 rounded-2xl shadow-md border border-background-2">
+          <Trophy className="mb-2 text-slate-200" />
+          <p className="text-xs uppercase font-bold text-slate-200">Body</p>
+          <p className="text-2xl font-bold text-slate-300">
             {pois.filter((p) => p.isUnlocked).length} / {pois.length}
           </p>
         </div>
@@ -161,17 +189,17 @@ export default function StatsPage() {
 
       {/* SEZNAM VYCHÁZEK */}
       <section className="space-y-4">
-        <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+        <h2 className="text-lg font-bold text-def-text flex items-center gap-2">
           <Calendar className="size-5 text-primary" /> Historie vycházek
         </h2>
         {sessions.map((s) => (
           <div
             key={s.id}
-            className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 flex justify-between items-center"
+            className="bg-background-2 p-4 rounded-xl shadow-sm border border-background flex justify-between items-center"
           >
             <div>
-              <p className="font-bold text-slate-700">{s.date}</p>
-              <p className="text-xs text-slate-400 flex items-center gap-1">
+              <p className="font-bold text-primary">{s.date}</p>
+              <p className="text-xs text-slate-400 flex items-center gap-1 mb-0">
                 <Clock className="size-3" /> {Math.floor(s.duration / 60)} min
               </p>
             </div>
@@ -186,42 +214,40 @@ export default function StatsPage() {
 
       {/* SBÍRKA POI */}
       <section className="space-y-4">
-        <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-          <MapPin className="size-5 text-primary" /> Odemčené body
+        <h2 className="text-lg font-bold text-def-text flex items-center gap-2">
+          <MapPin className="size-5 text-primary" /> Sbírka bodů
         </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 gap-3 pb-8 text-left uppercase">
           {pois.map((poi) => (
             <div
               key={poi.id}
-              className={`p-4 rounded-xl border-2 transition-all flex flex-col justify-center ${
+              // 4. Přidáno onClick a styly pro klikatelnost
+              onClick={() => setSelectedPoi(poi)}
+              className={`p-3 rounded-xl border transition-all flex flex-col justify-start text-sm cursor-pointer active:scale-95 shadow-sm ${
                 poi.isUnlocked
-                  ? "bg-white border-green-500 shadow-sm"
-                  : "bg-slate-50 border-slate-200 opacity-60"
+                  ? "bg-background-2 border-green-500"
+                  : "bg-background-2 border-slate-200 opacity-60"
               }`}
             >
               <div className="flex justify-between items-start">
-                <p
-                  className={`font-bold ${poi.isUnlocked ? "text-slate-800" : "text-slate-400"}`}
-                >
+                <p className={`font-bold mb-0 leading-tight ${poi.isUnlocked ? "text-def-text" : "text-def-text/50"}`}>
                   {poi.isUnlocked ? "✅" : "🔒"} {poi.name}
                 </p>
               </div>
 
-              {poi.isUnlocked && poi.unlockedAt && (
-                <p className="text-[10px] mt-2 text-green-600 font-medium flex items-center gap-1">
-                  <Clock className="size-3" />
-                  {new Date(poi.unlockedAt).toLocaleString("cs-CZ", {
-                    day: "numeric",
-                    month: "numeric",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
-                </p>
+              {poi.isUnlocked && (
+                 <span className="text-[9px] mt-2 text-green-600 font-medium">ZOBRAZIT INFO</span>
               )}
             </div>
           ))}
         </div>
       </section>
+      <PoiModal
+        poi={selectedPoi}
+        isOpen={!!selectedPoi}
+        onClose={() => setSelectedPoi(null)}
+        isUnlocked={selectedPoi ? selectedPoi.isUnlocked : false}
+      />
     </div>
   );
 }

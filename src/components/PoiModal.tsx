@@ -9,6 +9,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { BadgeQuestionMark } from "lucide-react";
 
 interface QuizQuestion {
   q: string;
@@ -36,7 +37,7 @@ export function PoiModal({ poi, isOpen, onClose, isUnlocked }: PoiModalProps) {
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[425px] max-h-[80vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-2xl font-bold text-primary">
             {poi.name}
@@ -62,8 +63,12 @@ export function PoiModal({ poi, isOpen, onClose, isUnlocked }: PoiModalProps) {
                     "K tomuto místu zatím nemáme žádný příběh, ale i tak je tu krásně!"}
                 </p>
               </div>
-              <Button className="w-full mt-6" onClick={() => setShowQuiz(true)}>
-                CHCI ODPOVĚDĚT NA KVÍZ
+              <Button
+              variant="default"
+              size="lg"
+              className="flex items-center gap-2 text-base m-auto text-white"
+               onClick={() => setShowQuiz(true)}>
+                <BadgeQuestionMark />CHCI ODPOVĚDĚT NA KVÍZ
               </Button>
             </>
           ) : (

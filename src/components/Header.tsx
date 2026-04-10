@@ -18,8 +18,10 @@ import {
   Moon,
   Monitor,
   SunMedium,
+  Upload,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { GpxImport } from "@/components/GpxImport";
 
 export default function Header() {
   const [isOpen, setIsOpen] = useState(false);
@@ -27,7 +29,7 @@ export default function Header() {
   const router = useRouter();
   const pathname = usePathname();
   const { theme, setTheme } = useTheme();
-  
+
   // --- LOGIKA SLEDOVÁNÍ NOVÝCH ZPRÁV (TEČKA) ---
   useEffect(() => {
     const checkNewMessages = async () => {
@@ -49,23 +51,20 @@ export default function Header() {
   const navItems = [
     { name: "Mapa trasy", href: "/mapa", icon: MapIcon, color: "bg-blue-500" },
     {
-      name: "Statistiky",
+      name: "Moje Statistiky",
       href: "/statistiky",
       icon: Trophy,
-      color: "bg-yellow-500",
     },
     {
-      name: "Nástěnka",
+      name: "Diskuse",
       href: "/nastenka",
       icon: MessageSquare,
-      color: "bg-green-500",
       badge: hasNewMessage,
     },
     {
       name: "Pravidla a Info",
       href: "/info",
       icon: BookOpen,
-      color: "bg-purple-500",
     },
   ];
 
@@ -81,10 +80,9 @@ export default function Header() {
     }
   };
 
-  
   return (
     <>
-      <header className="h-16 bg-white border-b border-slate-200 px-4 flex justify-between items-center z-[1001] relative shadow-sm">
+      <header className="h-18 bg-background border-b-4 border-primary px-4 flex justify-between items-center z-1001 relative shadow-md">
         <Image
           src="/pokraji_logo.png"
           alt="Logo"
@@ -96,7 +94,7 @@ export default function Header() {
 
         <button
           onClick={() => setIsOpen(true)}
-          className="relative p-2 text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
+          className="relative p-2 text-menu-btn hover:bg-slate-100 rounded-xl transition-colors"
         >
           <Menu className="size-7" />
           {hasNewMessage && (
@@ -107,23 +105,23 @@ export default function Header() {
 
       {/* --- OFF-CANVAS MENU OVERLAY --- */}
       <div
-        className={`fixed inset-0 bg-black/40 backdrop-blur-sm z-[2000] transition-opacity duration-300 ${isOpen ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+        className={`fixed inset-0 bg-black/40 backdrop-blur-sm z-2000 transition-opacity duration-300 ${isOpen ? "opacity-100" : "opacity-0 pointer-events-none"}`}
         onClick={() => setIsOpen(false)}
       />
 
       {/* --- OFF-CANVAS PANEL --- */}
       <div
-        className={`fixed top-0 right-0 h-full w-[85%] max-w-sm bg-slate-50 z-[2001] shadow-2xl transform transition-transform duration-300 ease-out ${isOpen ? "translate-x-0" : "translate-x-full"}`}
+        className={`fixed top-0 right-0 h-full  min-w-75 w-[75%] max-w-sm bg-background z-2001 shadow-2xl transform transition-transform duration-300 ease-out ${isOpen ? "translate-x-0" : "translate-x-full"}`}
       >
         <div className="flex flex-col h-full">
           {/* Header menu */}
-          <div className="p-6 flex justify-between items-center bg-white border-b">
-            <h2 className="text-xl font-bold text-slate-800 italic">MENU</h2>
+          <div className="p-6 flex justify-between items-center border-b border-primary">
+            <h2 className="text-2xl font-bold text-def-text">MENU</h2>
             <button
               onClick={() => setIsOpen(false)}
-              className="p-2 bg-slate-100 rounded-full"
+              className="p-2 bg-background-2 rounded-full"
             >
-              <X className="size-6 text-slate-500" />
+              <X className="size-6 text-menu-btn" />
             </button>
           </div>
 
@@ -133,18 +131,18 @@ export default function Header() {
               <button
                 key={item.href}
                 onClick={() => handleNavigate(item.href)}
-                className={`w-full flex items-center p-4 rounded-2xl border transition-all ${
+                className={`w-full flex items-center p-4 rounded-2xl border transition-all bg-menu-btns text-def-text uppercase ${
                   pathname === item.href
-                    ? "bg-white border-primary shadow-md ring-1 ring-primary/20"
-                    : "bg-white border-slate-100 shadow-sm active:scale-95"
+                    ? "border-primary shadow-md ring-1 ring-primary/20 text-primary"
+                    : "border-slate-100 shadow-sm active:scale-95"
                 }`}
               >
-                <div className={`p-3 rounded-xl text-white ${item.color} mr-4`}>
+                <div className={`p-3 rounded-xl text-white bg-secondary mr-4`}>
                   <item.icon className="size-6" />
                 </div>
                 <div className="flex-grow text-left">
                   <span
-                    className={`font-bold block ${pathname === item.href ? "text-primary" : "text-slate-700"}`}
+                    className={`font-bold block ${pathname === item.href ? "text-def-text" : "text-def-text"}`}
                   >
                     {item.name}
                   </span>
@@ -159,6 +157,20 @@ export default function Header() {
                 />
               </button>
             ))}
+            <div className="w-full flex items-center p-4 rounded-2xl border border-slate-100 bg-menu-btns shadow-sm active:scale-95 transition-all">
+              <div className="p-3 rounded-xl text-white bg-secondary mr-4">
+                <Upload className="size-6" />
+              </div>
+              <div className="flex-grow text-left">
+                <GpxImport
+                  onImportComplete={() => {
+                    setIsOpen(false);
+                    window.location.reload();
+                  }}
+                />
+              </div>
+              <ChevronRight className="size-5 text-slate-300" />
+            </div>
           </nav>
 
           {/* Footer menu */}
@@ -171,7 +183,6 @@ export default function Header() {
                 {[
                   { id: "light", icon: Sun, label: "Jasný" },
                   { id: "dark", icon: Moon, label: "Tmavý" },
-                  { id: "system", icon: Monitor, label: "Auto" },
                 ].map((t) => (
                   <button
                     key={t.id}

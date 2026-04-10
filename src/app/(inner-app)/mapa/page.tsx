@@ -5,13 +5,6 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { SokolLoader } from "@/components/SokolLoader";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { GpxImport } from "@/components/GpxImport";
 import { PoiModal } from "@/components/PoiModal";
 import { useRouter } from "next/navigation";
 
@@ -422,7 +415,7 @@ export default function MapPage() {
 
   if (loading)
     return (
-      <div className="h-screen w-full flex items-center justify-center bg-slate-50">
+      <div className="h-screen w-full flex items-center justify-center bg-background/70">
         <SokolLoader />
       </div>
     );
@@ -430,11 +423,11 @@ export default function MapPage() {
   return (
     <main className="h-screen w-full flex flex-col overflow-hidden">
       {/* Info bar */}
-      <div className="flex justify-between items-center bg-white p-3 border-t-2 border-primary shadow-inner">
+      <div className="flex justify-between items-center bg-background p-3 border-t-2 border-primary shadow-inner">
         <div className="flex gap-4 sm:gap-8">
           {/* Vzdálenost */}
           <div className="flex flex-col">
-            <span className="text-[10px] font-bold text-slate-400 uppercase leading-none mb-1">
+            <span className="text-[10px] font-bold text-def-text uppercase leading-none mb-1">
               Vzdálenost
             </span>
             <span className="text-xl font-bold text-primary leading-none">
@@ -444,20 +437,20 @@ export default function MapPage() {
 
           {/* Čas */}
           <div className="flex flex-col border-l border-slate-200 pl-4">
-            <span className="text-[10px] font-bold text-slate-400 uppercase leading-none mb-1">
+            <span className="text-[10px] font-bold text-def-text uppercase leading-none mb-1">
               Čistý čas
             </span>
-            <span className="text-xl font-bold text-slate-700 leading-none font-mono">
+            <span className="text-xl font-bold text-def-text leading-none font-mono">
               {formatTime(elapsedTime)}
             </span>
           </div>
 
           {/* Tempo */}
           <div className="flex flex-col border-l border-slate-200 pl-4 hidden xs:flex">
-            <span className="text-[10px] font-bold text-slate-400 uppercase leading-none mb-1">
+            <span className="text-[10px] font-bold text-def-text uppercase leading-none mb-1">
               Tempo
             </span>
-            <span className="text-xl font-bold text-slate-700 leading-none font-mono">
+            <span className="text-xl font-bold text-def-text leading-none font-mono">
               {calculatePace()} <span className="text-xs">min/km</span>
             </span>
           </div>
