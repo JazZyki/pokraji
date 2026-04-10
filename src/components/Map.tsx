@@ -105,13 +105,10 @@ export default function Map({
       style={{ height: "calc(100% - 154px)", width: "100%", zIndex: 0, }}
     >
       <TileLayer
-        url={theme === 'dark' 
-    ? `https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png`
-    : `https://api.mapy.cz/v1/maptiles/outdoor/256/{z}/{x}/{y}?apikey=${apiKey}`
-  }
-  attribution={theme === 'dark' ? '&copy; Stadia Maps' : '&copy; Seznam.cz'}
+          url={`https://api.mapy.cz/v1/maptiles/outdoor/256/{z}/{x}/{y}?apikey=${apiKey}`}
+          attribution='&copy; Seznam.cz'
       />
-
+      
       {/* Referenční trasa */}
       <Polyline
         positions={routeCoordinates}
