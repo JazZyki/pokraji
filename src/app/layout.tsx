@@ -4,6 +4,7 @@ import "leaflet/dist/leaflet.css";
 import { Work_Sans } from "next/font/google";
 import { cn } from "@/lib/utils";
 import { Footer } from "@/components/Footer";
+import { ThemeProvider } from "next-themes";
 
 const WorkSans = Work_Sans({
   variable: "--font-work-sans",
@@ -31,9 +32,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="cs" className={cn("font-sans")}>
+    <html lang="cs" className={cn("font-sans")} suppressHydrationWarning>
       <body className={`${WorkSans.variable} antialiased`}>
-        {children}
+        <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
+          {children}
+        </ThemeProvider>
         <script
           dangerouslySetInnerHTML={{
             __html: `

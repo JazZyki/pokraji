@@ -1,21 +1,20 @@
-"use client";
+"use client"; // <--- TOTO JE KLÍČOVÉ
 
 import dynamic from "next/dynamic";
 
-// Dynamický import headeru - vypne rendering na serveru
-const HeaderNoSSR = dynamic(() => import("@/components/Header"), {
+// Teď už ssr: false bude fungovat, protože jsme v Client Component
+const Header = dynamic(() => import("@/components/Header"), { 
   ssr: false,
-  // Volitelný loading stav, aby header neposkočil
-  loading: () => <div className="h-[112px] bg-white border-b" /> 
+  loading: () => <div className="h-16 bg-white border-b border-slate-200 shadow-sm" />
 });
 
 export default function InnerAppLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="h-screen w-full flex flex-col">
-      <HeaderNoSSR />
-      <div className="flex-grow relative pb-4">
+    <div className="flex flex-col h-screen overflow-hidden">
+      <Header />
+      <main className="flex-1 relative overflow-hidden bg-slate-50">
         {children}
-      </div>
+      </main>
     </div>
   );
 }
