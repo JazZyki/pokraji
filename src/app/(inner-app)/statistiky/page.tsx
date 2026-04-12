@@ -5,6 +5,8 @@ import { supabase } from "@/lib/supabase";
 import { Trophy, Clock, MapPin, Footprints, Calendar } from "lucide-react";
 import { SokolLoader } from "@/components/SokolLoader";
 import { PoiModal } from "@/components/PoiModal";
+import { Footer } from "@/components/Footer";
+
 
 interface SessionStats {
   id: string;
@@ -248,6 +250,7 @@ export default function StatsPage() {
         onClose={() => setSelectedPoi(null)}
         isUnlocked={selectedPoi ? selectedPoi.isUnlocked : false}
       />
+      <Footer />
     </div>
   );
 }

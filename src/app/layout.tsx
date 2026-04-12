@@ -3,7 +3,6 @@ import "./globals.css";
 import "leaflet/dist/leaflet.css";
 import { Work_Sans } from "next/font/google";
 import { cn } from "@/lib/utils";
-import { Footer } from "@/components/Footer";
 import { ThemeProvider } from "next-themes";
 
 const WorkSans = Work_Sans({
@@ -48,7 +47,6 @@ export default function RootLayout({
     `,
           }}
         />
-        <Footer />
       </body>
     </html>
   );

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { SokolLoader } from "@/components/SokolLoader";
 import { PoiModal } from "@/components/PoiModal";
 import { useRouter } from "next/navigation";
+import { Maximize2, Minimize2 } from "lucide-react";
 
 const MapWithNoSSR = dynamic(() => import("@/components/Map"), {
   ssr: false,
@@ -71,6 +72,8 @@ export default function MapPage() {
   const isTrackingRef = useRef(isTracking);
   const router = useRouter();
   const [elapsedTime, setElapsedTime] = useState(0);
+  const [isFullScreen, setIsFullScreen] = useState(false);
+
   useEffect(() => {
     isTrackingRef.current = isTracking;
   }, [isTracking]);
@@ -86,6 +89,25 @@ export default function MapPage() {
 
     return () => clearInterval(interval);
   }, [isTracking]);
+
+  useEffect(() => {
+    // Najdeme elementy podle ID nebo tagů (v layoutu je musíme označit)
+    const header = document.querySelector('header');
+    const footer = document.querySelector('footer');
+
+    if (isFullScreen) {
+      if (header) header.style.display = 'none';
+      if (footer) footer.style.display = 'none';
+    } else {
+      if (header) header.style.display = 'flex';
+      if (footer) footer.style.display = 'flex';
+    }
+
+    return () => {
+      if (header) header.style.display = 'flex';
+      if (footer) footer.style.display = 'flex';
+    };
+  }, [isFullScreen]);
 
   // Pomocná funkce pro formátování času (HH:MM:SS)
   const formatTime = (seconds: number) => {
@@ -464,9 +486,21 @@ export default function MapPage() {
           {isTracking ? "Pauza" : "Pokračovat"}
         </Button>
       </div>
-
+      
       {/* Map Container */}
-      <div className="grow relative bg-slate-200">
+      <div className={`grow relative bg-slate-200 transition-all duration-300 ${isFullScreen ? 'fixed inset-0 z-[1001]' : ''}`}>
+           {/* Tlačítko pro Fullscreen */}
+        <div className="flex gap-2 absolute top-5 right-5 z-1000 bg-white p-2 rounded-full shadow-md">
+           <Button
+            onClick={() => setIsFullScreen(!isFullScreen)}
+            variant="outline"
+            size="icon"
+            className="rounded-full size-8"
+          >
+            {isFullScreen ? <Minimize2 className="size-5" /> : <Maximize2 className="size-5" />}
+          </Button>
+
+        </div>
         <div className="absolute top-4 left-1/2 -translate-x-1/2 z-1000 w-full px-10 text-center pointer-events-none">
           <div className="inline-block bg-black/70 text-white px-4 py-1 rounded-full text-[10px] backdrop-blur-md border border-white/20">
             {debugMsg}

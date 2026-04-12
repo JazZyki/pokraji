@@ -1,4 +1,3 @@
-// components/Map.tsx
 "use client";
 
 import {
@@ -7,49 +6,42 @@ import {
   Polyline,
   Circle,
   useMap,
+  useMapEvents,
 } from "react-leaflet";
-import { useEffect } from "react";
-import { Tooltip } from "react-leaflet";
-import { Target } from "lucide-react";
-import { useTheme } from "next-themes";
+import { useEffect, useState } from "react";
+import { Crosshair } from "lucide-react";
 
-function ManualCenterButton({ location }: { location: [number, number] | null }) {
+// 1. TLAČÍTKO S INDIKACÍ STAVU
+function MapRecenter({ 
+  location, 
+  forceCenterTrigger 
+}: { 
+  location: [number, number] | null; 
+  forceCenterTrigger: number;
+}) {
   const map = useMap();
-
-  const handleManualCenter = () => {
-    if (location) {
-      map.flyTo(location, 16, { animate: true });
-    } else {
-      alert("Čekám na GPS signál...");
-    }
-  };
-
-  return (
-    <div className="absolute bottom-7 right-6 z-1000">
-      <button
-        onClick={handleManualCenter}
-        className="bg-white p-3 rounded-full shadow-2xl border-2 border-primary text-primary active:bg-slate-100 transition-colors"
-        title="Centrovat na moji polohu"
-      >
-        <Target className="size-6" />
-      </button>
-    </div>
-  );
-}
-
-function MapRecenter({ location, isTracking }: { location: [number, number] | null; isTracking: boolean }) {
-  const map = useMap();
-
+  
   useEffect(() => {
-    if (isTracking && location) {
-      // Mapa se plynule přesune na každou novou pozici z GPS
-      map.flyTo(location, map.getZoom(), { 
-        animate: true,
-        duration: 0.5 
+    // Spustí se jen když se změní číslo triggeru (tedy při kliku)
+    if (location && forceCenterTrigger > 0) {
+      map.flyTo(location, 17, { 
+        animate: true, 
+        duration: 0.8 
       });
     }
-  }, [location, map, isTracking]);
+  }, [forceCenterTrigger, location, map]);
+  
+  return null;
+}
 
+function ResizeMap({ isFullScreen }: { isFullScreen: boolean }) {
+  const map = useMap();
+  useEffect(() => {
+    // Počkáme malou chvíli na dokončení CSS tranzice
+    setTimeout(() => {
+      map.invalidateSize({ animate: true });
+    }, 300);
+  }, [isFullScreen, map]);
   return null;
 }
 // Pomocná funkce pro barvu
@@ -89,84 +81,94 @@ interface PoiPoint {
 export default function Map({
   routeCoordinates,
   userLocation,
-  segments = [], // Přijímáme segmenty
-  poiPoints = [], // Přidáno
-  unlockedIds = new Set(), // Přidáno
-  onPoiClick = () => {}, // Přidáno
-  isTracking = false, // Přidáno
-}: MapProps & { isTracking: boolean }) {
+  segments = [],
+  poiPoints = [],
+  unlockedIds = new Set(),
+  onPoiClick = () => {},
+  isTracking = false,
+}: MapProps) {
   const apiKey = process.env.NEXT_PUBLIC_MAPY_API_KEY;
-  const { theme } = useTheme();
+  const [forceCenterTrigger, setForceCenterTrigger] = useState(0);
 
   return (
-    <MapContainer
-      center={[49.811, 14.295]}
-      zoom={13}
-      style={{ height: "calc(100% - 154px)", width: "100%", zIndex: 0, }}
-    >
-      <TileLayer
+    <div className="relative w-full h-full">
+      <MapContainer
+        center={[49.811, 14.295]}
+        zoom={13}
+        style={{ height: "100%", width: "100%", zIndex: 0 }}
+        zoomControl={false}
+      >
+        <TileLayer
           url={`https://api.mapy.cz/v1/maptiles/outdoor/256/{z}/{x}/{y}?apikey=${apiKey}`}
           attribution='&copy; Seznam.cz'
-      />
-      
-      {/* Referenční trasa */}
-      <Polyline
-        positions={routeCoordinates}
-        pathOptions={{ color: "#2d2e88", weight: 8, opacity: 0.8 }}
-      />
-
-      {poiPoints?.map((poi) => (
-        <Circle
-          key={poi.id}
-          center={[poi.lat, poi.lon]}
-          radius={30}
-          pathOptions={{
-            color: unlockedIds?.has(poi.id) ? "#16a34a" : "#e40521",
-            fillColor: unlockedIds?.has(poi.id) ? "#16a34a" : "#e40521",
-            fillOpacity: 0.3,
-            weight: 2,
-          }}
-          eventHandlers={{
-            click: () => onPoiClick(poi),
-          }}
-        >
-        </Circle>
-      ))}
-
-      {/* Vykreslení segmentů (každá session je samostatná čára) */}
-      {segments.map((segment, sIdx) => (
-        <div key={`segment-${sIdx}`}>
-          {segment.points.map((point, pIdx) => {
-            if (pIdx === 0) return null;
-            const prevPoint = segment.points[pIdx - 1];
-            return (
-              <Polyline
-                key={`line-${sIdx}-${pIdx}`}
-                positions={[prevPoint.coords, point.coords]}
-                pathOptions={{
-                  color: getPathColor(point.dist),
-                  weight: 5,
-                }}
-              />
-            );
-          })}
-        </div>
-      ))}
-
-      <MapRecenter location={userLocation} isTracking={isTracking} />
-      <ManualCenterButton location={userLocation} />
-
-      {userLocation && (
-        <Circle
-          center={userLocation}
-          radius={15}
-          pathOptions={{
-            color: "#3b82f6",
-            fillColor: "#3b82f6",
-            fillOpacity: 1,
-          }}
         />
-      )}
-    </MapContainer>
+        
+        {/* Teď už jen tenhle jeden useEffect pro manuální skok */}
+        <MapRecenter 
+          location={userLocation} 
+          forceCenterTrigger={forceCenterTrigger}
+        />
+
+        <Polyline positions={routeCoordinates} pathOptions={{ color: "#2d2e88", weight: 8, opacity: 0.8 }} />
+
+        {/* POI body */}
+        {poiPoints?.map((poi) => (
+          <Circle
+            key={poi.id}
+            center={[poi.lat, poi.lon]}
+            radius={30}
+            pathOptions={{
+              color: unlockedIds?.has(poi.id) ? "#16a34a" : "#e40521",
+              fillColor: unlockedIds?.has(poi.id) ? "#16a34a" : "#e40521",
+              fillOpacity: 0.3,
+              weight: 2,
+            }}
+            eventHandlers={{ click: () => onPoiClick(poi) }}
+          />
+        ))}
+
+        {/* Historie trasy */}
+        {segments.map((segment, sIdx) => (
+          <div key={`segment-${sIdx}`}>
+            {segment.points.map((point, pIdx) => {
+              if (pIdx === 0) return null;
+              const prevPoint = segment.points[pIdx - 1];
+              return (
+                <Polyline
+                  key={`line-${sIdx}-${pIdx}`}
+                  positions={[prevPoint.coords, point.coords]}
+                  pathOptions={{ color: getPathColor(point.dist), weight: 5 }}
+                />
+              );
+            })}
+          </div>
+        ))}
+
+        {userLocation && (
+          <Circle
+            center={userLocation}
+            radius={15}
+            pathOptions={{ color: "#3b82f6", fillColor: "#3b82f6", fillOpacity: 1 }}
+          />
+        )}
+      </MapContainer>
+
+      {/* --- TLAČÍTKO JE TEĎ TADY - ABSOLUTNĚ POZICOVANÉ NAD KONTEJNEREM --- */}
+      <div className="absolute bottom-45 right-5 z-[500]">
+        <button
+          onClick={() => {
+            if (userLocation) {
+              // Jediný způsob, jak pohnout mapou, je toto kliknutí
+              setForceCenterTrigger(prev => prev + 1);
+            } else {
+              alert("Čekám na GPS signál...");
+            }
+          }}
+          className="p-2 rounded-full shadow-md transition-all bg-white text-primary active:scale-90 active:bg-slate-100"
+        >
+          <Crosshair className="size-8" />
+        </button>
+      </div>
+    </div>
   );
 }

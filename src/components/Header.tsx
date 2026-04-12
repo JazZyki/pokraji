@@ -82,7 +82,7 @@ export default function Header() {
 
   return (
     <>
-      <header className="h-18 bg-background border-b-4 border-primary px-4 flex justify-between items-center z-1001 relative shadow-md">
+      <header className="w-full h-18 bg-background border-b-4 border-primary px-4 flex justify-between items-center z-1001 relative shadow-md">
         <Image
           src="/pokraji_logo.png"
           alt="Logo"

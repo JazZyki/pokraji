@@ -8,6 +8,7 @@ import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { SokolText } from "@/components/SokolText";
 import { SokolLoader } from "@/components/SokolLoader";
+import { Footer } from "@/components/Footer";
 
 // Rozhraní pro událost instalace (PWA)
 interface BeforeInstallPromptEvent extends Event {
@@ -66,10 +67,10 @@ export default function RegisterPage() {
     }
   };
 
-  useEffect(() => {
+ useEffect(() => {
+    // 1. FUNKCE PRO KONTROLU REGISTRACE (Asynchronní)
     const checkExistingRegistration = async () => {
       const savedId = localStorage.getItem("knin_team_id");
-      // --- ÚPRAVA 2: KONTROLA PŘÍZNAKU "VIDĚL INFO" ---
       const infoSeen = localStorage.getItem("knin_info_seen");
 
       if (savedId) {
@@ -96,9 +97,37 @@ export default function RegisterPage() {
       setLoading(false);
     };
 
-    // ... (zbytek useEffectu pro PWA install prompt ponechán)
-    
+    // 2. DETEKCE INSTALACE (PWA)
+    // Zjistíme, jestli aplikace běží v režimu "na ploše"
+    const isStandalone = 
+      window.matchMedia('(display-mode: standalone)').matches || 
+      (window.navigator as NavigatorStandalone).standalone === true;
+
+    // Použijeme requestAnimationFrame, aby React mohl dokončit render
+    // a až pak změnil stav pro tlačítko (řeší to tvůj error s kaskádou)
+    requestAnimationFrame(() => {
+      if (!isStandalone) {
+        setShowInstallBtn(true);
+      }
+    });
+
+    // 3. EVENT LISTENER PRO ANDROID/CHROME
+    const handleBeforeInstallPrompt = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e as BeforeInstallPromptEvent);
+      // Pokud prohlížeč vyhodí prompt, ujistíme se, že tlačítko vidíme
+      setShowInstallBtn(true);
+    };
+
+    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+
+    // 4. SPUŠTĚNÍ KONTROLY DATABÁZE
     checkExistingRegistration();
+
+    // CLEANUP (Odstranění listeneru při odchodu ze stránky)
+    return () => {
+      window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+    };
   }, [router]);
 
   // --- ÚPRAVA 3: REGISTRACE ---
@@ -294,6 +323,7 @@ export default function RegisterPage() {
           )}
         </div>
       </div>
+      <Footer />
     </div>
   );
 }
