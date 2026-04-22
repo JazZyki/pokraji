@@ -1,13 +1,14 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { SokolLoader } from "@/components/SokolLoader";
 import { PoiModal } from "@/components/PoiModal";
 import { useRouter } from "next/navigation";
 import { Maximize2, Minimize2 } from "lucide-react";
+import { useTracking, TrackPoint } from "@/lib/TrackingContext";
 
 const MapWithNoSSR = dynamic(() => import("@/components/Map"), {
   ssr: false,
@@ -33,17 +34,6 @@ function calculateDistance(
   return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
 }
 
-interface TrackPoint {
-  coords: [number, number];
-  dist: number;
-  sessionId?: string;
-  created_at?: string;
-}
-
-interface TrackSegment {
-  points: TrackPoint[];
-}
-
 interface GeoJSONData {
   coordinates: [number, number][];
 }
@@ -57,38 +47,22 @@ interface PoiPoint {
 }
 
 export default function MapPage() {
+  const { 
+    isTracking, 
+    segments, setSegments, 
+    userLocation, 
+    elapsedTime, setElapsedTime, 
+    debugMsg, setDebugMsg,
+    handleToggleTracking 
+  } = useTracking();
+
   const [route, setRoute] = useState<[number, number][]>([]);
   const [loading, setLoading] = useState(true);
-  const [userLocation, setUserLocation] = useState<[number, number] | null>(
-    null,
-  );
-  const [isTracking, setIsTracking] = useState(false);
-  const [debugMsg, setDebugMsg] = useState<string>("Načítám data...");
-  const [segments, setSegments] = useState<TrackSegment[]>([]);
-  const lastSavedPos = useRef<{ lat: number; lon: number } | null>(null);
   const [poiPoints, setPoiPoints] = useState<PoiPoint[]>([]);
   const [unlockedIds, setUnlockedIds] = useState<Set<string>>(new Set());
   const [selectedPoi, setSelectedPoi] = useState<PoiPoint | null>(null);
-  const isTrackingRef = useRef(isTracking);
   const router = useRouter();
-  const [elapsedTime, setElapsedTime] = useState(0);
   const [isFullScreen, setIsFullScreen] = useState(false);
-
-  useEffect(() => {
-    isTrackingRef.current = isTracking;
-  }, [isTracking]);
-
-  useEffect(() => {
-    let interval: NodeJS.Timeout;
-
-    if (isTracking) {
-      interval = setInterval(() => {
-        setElapsedTime((prev) => prev + 1);
-      }, 1000);
-    }
-
-    return () => clearInterval(interval);
-  }, [isTracking]);
 
   useEffect(() => {
     // Najdeme elementy podle ID nebo tagů (v layoutu je musíme označit)
@@ -117,7 +91,7 @@ export default function MapPage() {
     return [h, m, s].map((v) => v.toString().padStart(2, "0")).join(":");
   };
 
-  // Výpočet celkové vzdálenosti
+  // Výpočet celkové vzdálenosti (používáme segments z contextu)
   const totalDistance = segments.reduce((acc, segment) => {
     const segmentDist = segment.points.reduce((segAcc, point, idx) => {
       if (idx === 0) return 0;
@@ -138,15 +112,17 @@ export default function MapPage() {
   // Načtení historických dat
   useEffect(() => {
     const teamId = localStorage.getItem("knin_team_id");
+    console.log("🔍 Inicializace Mapy pro tým:", teamId);
+    
     if (!teamId) {
+      console.warn("⚠️ Žádné teamId v localStorage, přesměrovávám...");
       router.push("/");
       return;
     }
+    
     const fetchInitialData = async () => {
       try {
-        const teamId = localStorage.getItem("knin_team_id");
-        if (!teamId) return;
-
+        setLoading(true);
         // 1. Načtení trasy
         const { data: routeData } = await supabase
           .from("route_display")
@@ -156,88 +132,88 @@ export default function MapPage() {
         if (routeData?.geojson_data) {
           const coords = (routeData.geojson_data as GeoJSONData).coordinates;
           setRoute(coords.map(([lon, lat]: [number, number]) => [lat, lon]));
+          console.log("✅ Trasa načtena, počet bodů:", coords.length);
         }
 
-        // 2. Načtení historie tras týmu
-        const { data: history, error: histError } = await supabase
-          .from("team_tracking")
-          .select(
-            "lat_val, lon_val, distance_from_route, session_id, created_at",
-          )
-          .eq("team_id", teamId)
-          .order("created_at", { ascending: true });
+        // 2. Načtení historie jen pokud ještě nemáme segments (např. při prvním loadu)
+        if (segments.length === 0) {
+          console.log("🛰️ Stahuji historii z team_tracking...");
+          const { data: history, error: histError } = await supabase
+            .from("team_tracking")
+            .select(
+              "lat_val, lon_val, distance_from_route, session_id, created_at",
+            )
+            .eq("team_id", teamId)
+            .order("created_at", { ascending: true });
 
-        if (history && !histError) {
-          const grouped = history.reduce(
-            (acc: { [key: string]: TrackPoint[] }, h) => {
-              const sId = h.session_id || "old_session";
-              if (!acc[sId]) acc[sId] = [];
-              acc[sId].push({
-                coords: [h.lat_val, h.lon_val],
-                dist: h.distance_from_route || 0,
-                sessionId: sId,
-                created_at: h.created_at,
-              });
-              return acc;
-            },
-            {},
-          );
-
-          const { data: pois } = await supabase.from("poi_points").select("*");
-
-          if (pois) setPoiPoints(pois);
-
-          const newSegments = Object.values(grouped).map((points) => ({
-            points,
-          }));
-          setSegments(newSegments);
-
-          if (newSegments.length > 0) {
-            const lastPoints = newSegments[newSegments.length - 1].points;
-            if (lastPoints.length > 0) {
-              const lastP = lastPoints[lastPoints.length - 1];
-              setUserLocation(lastP.coords);
-              lastSavedPos.current = {
-                lat: lastP.coords[0],
-                lon: lastP.coords[1],
-              };
-            }
+          if (histError) {
+            console.error("❌ Chyba při načítání historie:", histError.message);
           }
 
-          // 4. Načtení progresu týmu (přidej toto):
-          const { data: progress, error: progressError } = await supabase
-            .from("team_poi_progress")
-            .select("poi_id")
-            .eq("team_id", teamId);
+          if (history && !histError) {
+            console.log(`📊 Staženo ${history.length} bodů historie.`);
+            
+            const grouped = history.reduce(
+              (acc: { [key: string]: TrackPoint[] }, h) => {
+                const sId = h.session_id || "old_session";
+                if (!acc[sId]) acc[sId] = [];
+                const dist = h.distance_from_route || 0;
+                acc[sId].push({
+                  coords: [h.lat_val, h.lon_val],
+                  dist: dist,
+                  isOff: dist > 500,
+                  sessionId: sId,
+                  created_at: h.created_at,
+                });
+                return acc;
+              },
+              {},
+            );
 
-          if (progressError) {
-            setDebugMsg(`❌ Chyba načítání POI: ${progressError.message}`);
+            const newSegments = Object.values(grouped).map((points) => ({
+              points,
+            }));
+            
+            console.log("🧩 Zpracované segmenty:", newSegments.length, newSegments);
+            setSegments(newSegments);
+
+            let totalSecondsFromHistory = 0;
+            Object.values(grouped).forEach((points: TrackPoint[]) => {
+              if (points.length > 1) {
+                const start = new Date(points[0].created_at || "").getTime();
+                const end = new Date(
+                  points[points.length - 1].created_at || "",
+                ).getTime();
+                totalSecondsFromHistory += Math.floor((end - start) / 1000);
+              }
+            });
+
+            setElapsedTime(totalSecondsFromHistory);
           }
-
-          if (progress) {
-            console.log("Načtené POI z DB:", progress);
-            const ids = new Set(progress.map((p) => String(p.poi_id))); // Jistota stringu
-            setUnlockedIds(ids);
-          }
-
-          let totalSecondsFromHistory = 0;
-
-          Object.values(grouped).forEach((points: TrackPoint[]) => {
-            if (points.length > 1) {
-              // Předpokládáme, že body mají property 'created_at' z DB
-              // Pokud ji nemáš v interface TrackPoint, přidej ji tam.
-              const start = new Date(points[0].created_at || "").getTime();
-              const end = new Date(
-                points[points.length - 1].created_at || "",
-              ).getTime();
-              totalSecondsFromHistory += Math.floor((end - start) / 1000);
-            }
-          });
-
-          setElapsedTime(totalSecondsFromHistory);
         }
+
+        // 3. POI Body
+        const { data: pois } = await supabase.from("poi_points").select("*");
+        if (pois) {
+          setPoiPoints(pois);
+          console.log("📍 Načteno POI bodů:", pois.length);
+        }
+
+        // 4. Progres týmu
+        const { data: progress } = await supabase
+          .from("team_poi_progress")
+          .select("poi_id")
+          .eq("team_id", teamId);
+
+        if (progress) {
+          const ids = new Set(progress.map((p) => String(p.poi_id)));
+          setUnlockedIds(ids);
+          console.log("🔓 Odemčené body:", ids.size);
+        }
+
         setDebugMsg("GPS připravena");
-      } catch {
+      } catch (err) {
+        console.error("🔥 Fatální chyba v fetchInitialData:", err);
         setDebugMsg("❌ Chyba při inicializaci");
       } finally {
         setLoading(false);
@@ -245,195 +221,44 @@ export default function MapPage() {
     };
 
     fetchInitialData();
-  }, [router]);
+  }, [router, segments.length, setElapsedTime, setSegments, setDebugMsg]);
 
-  const calculatePace = () => {
-            if (totalDistance === 0 || elapsedTime === 0) return "--:--";
-
-            // Celkový čas v minutách děleno vzdáleností
-            const paceDecimal = elapsedTime / 60 / totalDistance;
-            const mins = Math.floor(paceDecimal);
-            const secs = Math.round((paceDecimal - mins) * 60);
-
-            return `${mins}:${secs.toString().padStart(2, "0")}`;
-          };
-
+  // POI Proximity Check (provádíme i v Mapa page, protože tady chceme UI feedback)
   useEffect(() => {
-    let wakeLock: WakeLockSentinel | null = null;
-    const requestWakeLock = async () => {
-      try {
-        if ("wakeLock" in navigator) {
-          wakeLock = await navigator.wakeLock.request("screen");
+    if (!userLocation || poiPoints.length === 0) return;
+
+    const checkPois = async () => {
+      const [lat, lon] = userLocation;
+      for (const poi of poiPoints) {
+        if (unlockedIds.has(String(poi.id))) continue;
+
+        const distToPoi = calculateDistance(lat, lon, poi.lat, poi.lon) * 1000;
+
+        if (distToPoi <= 100) {
+          const teamId = localStorage.getItem("knin_team_id");
+          if (teamId) {
+            const { error } = await supabase
+              .from("team_poi_progress")
+              .insert({ team_id: teamId, poi_id: poi.id });
+
+            if (!error || (error && (error as any).code === "23505")) {
+              setUnlockedIds((prev) => new Set([...prev, String(poi.id)]));
+              setDebugMsg(`🌟 BOD ODEMČEN: ${poi.name}`);
+            }
+          }
         }
-      } catch (err) {
-        console.error("WakeLock failed", err);
       }
     };
+    checkPois();
+  }, [userLocation, poiPoints, unlockedIds, setDebugMsg]);
 
-    if (isTracking) requestWakeLock();
-
-    return () => {
-      if (wakeLock) wakeLock.release();
-    };
-  }, [isTracking]);
-
-  // Funkce pro odeslání polohy
-  const saveLocation = useCallback(async (lat: number, lon: number) => {
-    const teamId = localStorage.getItem("knin_team_id");
-    const sessionId = localStorage.getItem("current_session_id");
-    if (!teamId || !sessionId) return;
-
-    const { data, error } = await supabase.rpc("track_team_location", {
-      t_id: teamId,
-      lat_val: lat,
-      lon_val: lon,
-      s_id: sessionId,
-    });
-
-    if (!error && data) {
-      const newPoint: TrackPoint = {
-        coords: [lat, lon],
-        dist: data.dist,
-        sessionId,
-      };
-      setSegments((prev) => {
-        const updated = [...prev];
-        if (updated.length === 0) updated.push({ points: [] });
-        const lastIdx = updated.length - 1;
-        updated[lastIdx] = {
-          ...updated[lastIdx],
-          points: [...updated[lastIdx].points, newPoint],
-        };
-        return updated;
-      });
-      setDebugMsg(
-        data.is_off
-          ? `❗ MIMO TRASU (${Math.round(data.dist)}m)`
-          : `✅ OK: ${new Date().toLocaleTimeString()}`,
-      );
-    }
-  }, []);
-
-  // Toggle sledování
-  const handleToggleTracking = () => {
-    if (!isTracking) {
-      const newSessionId = crypto.randomUUID();
-      localStorage.setItem("current_session_id", newSessionId); // Zápis
-      setSegments((prev) => [...prev, { points: [] }]);
-      setIsTracking(true);
-      isTrackingRef.current = true; // Okamžitá aktualizace Refu
-      setDebugMsg("🛰️ Startuji GPS...");
-    } else {
-      localStorage.removeItem("current_session_id");
-      setIsTracking(false);
-      isTrackingRef.current = false;
-      setDebugMsg("Trasa ukončena");
-    }
+  const calculatePace = () => {
+    if (totalDistance === 0 || elapsedTime === 0) return "--:--";
+    const paceDecimal = elapsedTime / 60 / totalDistance;
+    const mins = Math.floor(paceDecimal);
+    const secs = Math.round((paceDecimal - mins) * 60);
+    return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
-
-  // Watch Position (GPS)
-  // 2. UPRAVENÝ GPS EFFECT
-  useEffect(() => {
-    if (!("geolocation" in navigator)) return;
-
-    const watchId = navigator.geolocation.watchPosition(
-      async (pos) => {
-        const { latitude, longitude, accuracy } = pos.coords;
-        setUserLocation([latitude, longitude]);
-
-        if (poiPoints.length > 0) {
-          for (const poi of poiPoints) {
-            // Pokud už je v Setu (odemčený), přeskočíme ho
-            if (unlockedIds.has(String(poi.id))) continue;
-
-            const distToPoi =
-              calculateDistance(latitude, longitude, poi.lat, poi.lon) * 1000;
-
-            // Tolerance 100 metrů pro spolehlivost v terénu
-            if (distToPoi <= 100) {
-              const teamId = localStorage.getItem("knin_team_id");
-              if (teamId) {
-                const { error } = await supabase
-                  .from("team_poi_progress")
-                  .insert({ team_id: teamId, poi_id: poi.id });
-
-                // Pokud insert projde (nebo už tam je - code 23505), odemkneme v aplikaci
-                if (!error || (error && error.code === "23505")) {
-                  setUnlockedIds((prev) => new Set([...prev, String(poi.id)]));
-                  setDebugMsg(`🌟 BOD ODEMČEN: ${poi.name}`);
-                } else {
-                  console.error("Chyba při ukládání POI:", error);
-                }
-              }
-            }
-          }
-        }
-
-        if (!isTrackingRef.current) return;
-
-        // ZMÍRNĚNÍ PODMÍNKY: Pokud ladíš, dej sem klidně 300, ať vidíš, že to běží
-        if (accuracy > 150) {
-          setDebugMsg(`Slabý signál: ${Math.round(accuracy)}m`);
-          return;
-        }
-
-        setDebugMsg("✅ Sleduji a ukládám...");
-
-        // Logika uložení
-        const teamId = localStorage.getItem("knin_team_id");
-        const sId = localStorage.getItem("current_session_id");
-
-        if (teamId && sId) {
-          let shouldSave = false;
-          if (!lastSavedPos.current) {
-            shouldSave = true;
-          } else {
-            const d =
-              calculateDistance(
-                lastSavedPos.current.lat,
-                lastSavedPos.current.lon,
-                latitude,
-                longitude,
-              ) * 1000;
-            if (d >= 10) shouldSave = true;
-          }
-
-          if (shouldSave) {
-            // Voláme přímo RPC přes Supabase pro test, zda to projde
-            const { data, error } = await supabase.rpc("track_team_location", {
-              t_id: teamId,
-              lat_val: latitude,
-              lon_val: longitude,
-              s_id: sId,
-            });
-
-            if (!error && data) {
-              lastSavedPos.current = { lat: latitude, lon: longitude };
-              // Aktualizace stavu pro mapu
-              const newPoint: TrackPoint = {
-                coords: [latitude, longitude] as [number, number],
-                dist: data.dist,
-                sessionId: sId,
-              };
-              setSegments((prev) => {
-                const copy = [...prev];
-                if (copy.length > 0) {
-                  copy[copy.length - 1].points.push(newPoint);
-                }
-                return copy;
-              });
-            } else if (error) {
-              setDebugMsg(`❌ DB Chyba: ${error.message}`);
-            }
-          }
-        }
-      },
-      (err) => setDebugMsg(`❌ GPS Error: ${err.message}`),
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
-    );
-
-    return () => navigator.geolocation.clearWatch(watchId);
-  }, [poiPoints, unlockedIds]); // ODEBRÁNO saveLocation ze závislostí!
 
   if (loading)
     return (
@@ -489,7 +314,6 @@ export default function MapPage() {
       
       {/* Map Container */}
       <div className={`grow relative bg-slate-200 transition-all duration-300 ${isFullScreen ? 'fixed inset-0 z-[1001]' : ''}`}>
-           {/* Tlačítko pro Fullscreen */}
         <div className="flex gap-2 absolute top-5 right-5 z-1000 bg-white p-2 rounded-full shadow-md">
            <Button
             onClick={() => setIsFullScreen(!isFullScreen)}
@@ -499,7 +323,6 @@ export default function MapPage() {
           >
             {isFullScreen ? <Minimize2 className="size-5" /> : <Maximize2 className="size-5" />}
           </Button>
-
         </div>
         <div className="absolute top-4 left-1/2 -translate-x-1/2 z-1000 w-full px-10 text-center pointer-events-none">
           <div className="inline-block bg-black/70 text-white px-4 py-1 rounded-full text-[10px] backdrop-blur-md border border-white/20">

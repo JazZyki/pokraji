@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabase";
-import { Camera, Send, Image as ImageIcon, Loader2 } from "lucide-react";
+import { Camera, Send, Loader2, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogPortal, DialogOverlay } from "@/components/ui/dialog";
 import imageCompression from "browser-image-compression";
 import Image from "next/image";
 
@@ -27,15 +28,17 @@ export default function NastenkaPage() {
   const [tempPhotoUrl, setTempPhotoUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [myTeamId, setMyTeamId] = useState<string | null>(null);
+  const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
 
   useEffect(() => {
+    setMyTeamId(localStorage.getItem("knin_team_id"));
     fetchComments();
-    // Realtime update - volitelné, ale skvělé
+    // Realtime update
     const channel = supabase
       .channel("schema-db-changes")
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "team_comments" },
+        { event: "*", schema: "public", table: "team_comments" },
         fetchComments,
       )
       .subscribe();
@@ -52,26 +55,34 @@ export default function NastenkaPage() {
     if (data) setComments(data);
   }
 
-  // Zpracování a nahrání fotky
+  // Zpracování a nahrání fotky s vylepšenou optimalizací
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setUploading(true);
     try {
-      // 1. Komprese obrazu (max 1MB, max šířka 1200px)
+      // OPTIMALIZACE PRO MOBILNÍ DATA:
+      // - Max 0.3MB (300KB) pro rychlé načítání v terénu
+      // - Max 1000px (dostatečné pro mobily i lightbox)
+      // - Konverze do WebP (moderní, vysoce efektivní formát)
       const options = {
-        maxSizeMB: 0.8,
-        maxWidthOrHeight: 1200,
+        maxSizeMB: 0.3,
+        maxWidthOrHeight: 1000,
         useWebWorker: true,
+        fileType: 'image/webp' as string, // Vynutíme WebP pro úsporu dat
       };
+      
       const compressedFile = await imageCompression(file, options);
 
-      // 2. Nahrání do Storage
-      const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.jpg`;
+      // 2. Nahrání do Storage (přípona .webp)
+      const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.webp`;
       const { error: uploadError } = await supabase.storage
         .from("PoKraji")
-        .upload(fileName, compressedFile);
+        .upload(fileName, compressedFile, {
+          contentType: 'image/webp',
+          upsert: true
+        });
 
       if (uploadError) throw uploadError;
 
@@ -84,7 +95,8 @@ export default function NastenkaPage() {
       setCommentType("photo");
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Neznámá chyba";
-      alert(`Chyba: ${errorMessage}`);
+      alert(`Chyba při nahrávání: ${errorMessage}`);
+      console.error(err);
     } finally {
       setUploading(false);
     }
@@ -114,9 +126,22 @@ export default function NastenkaPage() {
     }
   };
 
-  useEffect(() => {
-    setMyTeamId(localStorage.getItem("knin_team_id"));
-  }, []);
+  const handleDelete = async (id: string) => {
+    if (!confirm("Opravdu chceš smazat tento vzkaz?")) return;
+
+    const teamId = localStorage.getItem("knin_team_id");
+    
+    const { error } = await supabase
+      .from("team_comments")
+      .delete()
+      .match({ id: id, team_id: teamId });
+
+    if (error) {
+      alert(`Chyba při mazání: ${error.message}`);
+    } else {
+      fetchComments();
+    }
+  };
 
   useEffect(() => {
     // Označíme čas návštěvy pro notifikační tečku v menu
@@ -133,7 +158,7 @@ export default function NastenkaPage() {
           return (
             <div
               key={c.id}
-              className={`max-w-[85%] p-4 rounded-2xl shadow-sm flex flex-col bg-background-2 ${
+              className={`max-w-[85%] p-4 rounded-2xl shadow-sm flex flex-col bg-background-2 group ${
                 isMe
                   ? "ml-auto border-r-4 border-r-primary rounded-tr-none"
                   : "mr-auto border-l-4 border-l-slate-400 rounded-tl-none"
@@ -142,19 +167,30 @@ export default function NastenkaPage() {
               <div
                 className={`flex justify-between items-start mb-1 gap-4 ${isMe ? "flex-row-reverse" : "flex-row"}`}
               >
-                <span
-                  className={`font-bold text-xs uppercase tracking-tight ${isMe ? "text-primary" : "text-slate-500"}`}
-                >
-                  {isMe ? "Můj tým" : c.team_name}
-                </span>
-                <span className="text-[9px] text-slate-400 mt-0.5 whitespace-nowrap">
-                  {new Date(c.created_at).toLocaleString("cs-CZ", {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                    day: "numeric",
-                    month: "numeric",
-                  })}
-                </span>
+                <div className={`flex flex-col ${isMe ? "items-end" : "items-start"}`}>
+                  <span
+                    className={`font-bold text-xs uppercase tracking-tight ${isMe ? "text-primary" : "text-slate-500"}`}
+                  >
+                    {isMe ? "Můj tým" : c.team_name}
+                  </span>
+                  <span className="text-[9px] text-slate-400 mt-0.5 whitespace-nowrap">
+                    {new Date(c.created_at).toLocaleString("cs-CZ", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                      day: "numeric",
+                      month: "numeric",
+                    })}
+                  </span>
+                </div>
+                {isMe && (
+                  <button
+                    onClick={() => handleDelete(c.id)}
+                    className="sm:opacity-0 group-hover:opacity-100 transition-opacity p-2 -m-1 text-red-500 hover:bg-red-50 rounded-full"
+                    title="Smazat vzkaz"
+                  >
+                    <Trash2 className="size-4" />
+                  </button>
+                )}
               </div>
 
               <p
@@ -164,14 +200,15 @@ export default function NastenkaPage() {
               </p>
 
               {c.photo_url && (
-                <div className="mt-3 rounded-lg overflow-hidden border border-slate-200">
+                <div 
+                  className="mt-3 rounded-lg overflow-hidden border border-slate-200 cursor-pointer hover:opacity-90 transition-opacity aspect-video relative"
+                  onClick={() => setSelectedPhoto(c.photo_url)}
+                >
                   <Image
                     src={c.photo_url}
                     alt="Foto z trasy"
-                    width={500}
-                    height={300}
-                    className="w-full h-auto object-cover"
-                    // sizes pomáhá prohlížeči vybrat správné rozlišení
+                    fill
+                    className="object-cover"
                     sizes="(max-width: 768px) 85vw, 500px"
                   />
                 </div>
@@ -180,6 +217,33 @@ export default function NastenkaPage() {
           );
         })}
       </div>
+
+      {/* LIGHTBOX / MODAL PRO FOTKY */}
+      <Dialog open={!!selectedPhoto} onOpenChange={(open) => !open && setSelectedPhoto(null)}>
+        <DialogPortal>
+          <DialogOverlay className="z-[6000]" />
+          <DialogContent className="max-w-4xl p-0 border-none bg-transparent shadow-none z-[6001] w-[95vw] sm:w-[85vw] h-auto max-h-[90vh] flex items-center justify-center">
+            {selectedPhoto && (
+              <div className="relative w-full h-full flex items-center justify-center">
+                <Image
+                  src={selectedPhoto}
+                  alt="Full size photo"
+                  width={1200}
+                  height={800}
+                  className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl"
+                  priority
+                />
+                <button
+                  onClick={() => setSelectedPhoto(null)}
+                  className="absolute -top-12 right-0 text-white bg-black/50 p-2 rounded-full hover:bg-black/80 transition-colors"
+                >
+                  <X className="size-6" />
+                </button>
+              </div>
+            )}
+          </DialogContent>
+        </DialogPortal>
+      </Dialog>
 
       {/* FORMULÁŘ DOLE */}
       <div className="fixed bottom-0 left-0 right-0 bg-background-2/50 backdrop-blur-lg border-t p-4 z-50">

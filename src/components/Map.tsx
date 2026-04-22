@@ -5,10 +5,10 @@ import {
   TileLayer,
   Polyline,
   Circle,
+  CircleMarker,
   useMap,
-  useMapEvents,
 } from "react-leaflet";
-import { useEffect, useState } from "react";
+import React, { useEffect, useRef } from "react";
 import { Crosshair } from "lucide-react";
 
 // 1. TLAČÍTKO S INDIKACÍ STAVU
@@ -20,35 +20,31 @@ function MapRecenter({
   forceCenterTrigger: number;
 }) {
   const map = useMap();
+  const lastTrigger = useRef(forceCenterTrigger);
   
   useEffect(() => {
-    // Spustí se jen když se změní číslo triggeru (tedy při kliku)
-    if (location && forceCenterTrigger > 0) {
+    // Spustí se jen když se trigger skutečně zvýšil (klik na tlačítko)
+    if (location && forceCenterTrigger > lastTrigger.current) {
       map.flyTo(location, 17, { 
         animate: true, 
         duration: 0.8 
       });
     }
+    lastTrigger.current = forceCenterTrigger;
   }, [forceCenterTrigger, location, map]);
   
   return null;
 }
 
-function ResizeMap({ isFullScreen }: { isFullScreen: boolean }) {
-  const map = useMap();
-  useEffect(() => {
-    // Počkáme malou chvíli na dokončení CSS tranzice
-    setTimeout(() => {
-      map.invalidateSize({ animate: true });
-    }, 300);
-  }, [isFullScreen, map]);
-  return null;
-}
 // Pomocná funkce pro barvu
-const getPathColor = (dist: number) => {
-  if (dist <= 50) return "#16a34a"; // Zelená (na trase)
-  if (dist <= 150) return "#f97316"; // Oranžová (blízko)
-  return "#dc2626"; // Červená (mimo)
+const getPathColor = (point: TrackPoint) => {
+  // Pokud jsme mimo teritorium (isOff), je vše OK -> zelená
+  if (point.isOff) return "#16a34a";
+  
+  // Pokud jsme v teritoriu, barva podle vzdálenosti od trasy
+  if (point.dist <= 100) return "#16a34a"; // Zelená (na trase do 100m)
+  if (point.dist <= 200) return "#f97316"; // Oranžová (blízko 101-200m)
+  return "#dc2626"; // Červená (mimo > 200m)
 };
 
 interface TrackSegment {
@@ -58,17 +54,18 @@ interface TrackSegment {
 interface MapProps {
   routeCoordinates: [number, number][];
   userLocation: [number, number] | null;
-  segments: TrackSegment[]; // Změna z plochého pole na segmenty
-  userPathWithDist?: TrackPoint[]; // Změna typu
-  poiPoints?: PoiPoint[]; // Přidáno
-  unlockedIds?: Set<string>; // Přidáno
-  onPoiClick?: (poi: PoiPoint) => void; // Přidáno pro callback při kliknutí na POI
-  isTracking?: boolean; // Přidáno
+  segments: TrackSegment[];
+  userPathWithDist?: TrackPoint[];
+  poiPoints?: PoiPoint[];
+  unlockedIds?: Set<string>;
+  onPoiClick?: (poi: PoiPoint) => void;
+  isTracking?: boolean;
 }
 
 interface TrackPoint {
   coords: [number, number];
   dist: number;
+  isOff?: boolean;
 }
 
 interface PoiPoint {
@@ -85,10 +82,10 @@ export default function Map({
   poiPoints = [],
   unlockedIds = new Set(),
   onPoiClick = () => {},
-  isTracking = false,
 }: MapProps) {
   const apiKey = process.env.NEXT_PUBLIC_MAPY_API_KEY;
-  const [forceCenterTrigger, setForceCenterTrigger] = useState(0);
+  // Startujeme na 0, aby první načtení location nespustilo autofocus
+  const [forceCenterTrigger, setForceCenterTrigger] = React.useState(0);
 
   return (
     <div className="relative w-full h-full">
@@ -103,7 +100,6 @@ export default function Map({
           attribution='&copy; Seznam.cz'
         />
         
-        {/* Teď už jen tenhle jeden useEffect pro manuální skok */}
         <MapRecenter 
           location={userLocation} 
           forceCenterTrigger={forceCenterTrigger}
@@ -129,7 +125,7 @@ export default function Map({
 
         {/* Historie trasy */}
         {segments.map((segment, sIdx) => (
-          <div key={`segment-${sIdx}`}>
+          <React.Fragment key={`segment-${sIdx}`}>
             {segment.points.map((point, pIdx) => {
               if (pIdx === 0) return null;
               const prevPoint = segment.points[pIdx - 1];
@@ -137,28 +133,32 @@ export default function Map({
                 <Polyline
                   key={`line-${sIdx}-${pIdx}`}
                   positions={[prevPoint.coords, point.coords]}
-                  pathOptions={{ color: getPathColor(point.dist), weight: 5 }}
+                  pathOptions={{ color: getPathColor(point), weight: 5 }}
                 />
               );
             })}
-          </div>
+          </React.Fragment>
         ))}
 
         {userLocation && (
-          <Circle
+          <CircleMarker
             center={userLocation}
-            radius={15}
-            pathOptions={{ color: "#3b82f6", fillColor: "#3b82f6", fillOpacity: 1 }}
+            radius={8}
+            pathOptions={{ 
+              color: "white", 
+              fillColor: "#3b82f6", 
+              fillOpacity: 1, 
+              weight: 2 
+            }}
           />
         )}
       </MapContainer>
 
-      {/* --- TLAČÍTKO JE TEĎ TADY - ABSOLUTNĚ POZICOVANÉ NAD KONTEJNEREM --- */}
+      {/* --- TLAČÍTKO CENTROVÁNÍ --- */}
       <div className="absolute bottom-45 right-5 z-[500]">
         <button
           onClick={() => {
             if (userLocation) {
-              // Jediný způsob, jak pohnout mapou, je toto kliknutí
               setForceCenterTrigger(prev => prev + 1);
             } else {
               alert("Čekám na GPS signál...");

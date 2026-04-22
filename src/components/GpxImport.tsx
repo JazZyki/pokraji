@@ -3,17 +3,31 @@
 import { useState } from "react";
 import gpxParser from "gpxparser";
 import { supabase } from "@/lib/supabase";
-import { Upload } from "lucide-react";
+
+// Pomocná funkce pro výpočet vzdálenosti (v km)
+function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLon = (lon2 - lon1) * (Math.PI / 180);
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+}
 
 export function GpxImport({ onImportComplete }: { onImportComplete: () => void }) {
   const [uploading, setUploading] = useState(false);
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    console.log("onChange event fired!");
     const file = event.target.files?.[0];
     if (!file) return;
 
-    console.log("File picked:", file.name);
+    const teamId = localStorage.getItem("knin_team_id");
+    if (!teamId) {
+      alert("Chyba: Tým nebyl nalezen.");
+      return;
+    }
+
     setUploading(true);
 
     const reader = new FileReader();
@@ -23,11 +37,10 @@ export function GpxImport({ onImportComplete }: { onImportComplete: () => void }
         const gpx = new gpxParser();
         gpx.parse(xml);
 
-        // 1. Získání bodů z GPX (univerzální pro různé formáty)
+        // 1. Získání bodů z GPX
         interface GpxPoint {
           lat: number;
           lon: number;
-          [key: string]: unknown;
         }
         let rawPoints: GpxPoint[] = [];
         if (gpx.tracks?.[0]?.points) rawPoints = gpx.tracks[0].points;
@@ -36,23 +49,53 @@ export function GpxImport({ onImportComplete }: { onImportComplete: () => void }
 
         if (rawPoints.length === 0) throw new Error("GPX neobsahuje žádné body trasy.");
 
-        // 2. Mapování na čistý objekt souřadnic
         const allPoints = rawPoints.map(p => ({ lat: p.lat, lon: p.lon }));
 
-        // 3. PROŘEDĚNÍ BODŮ (Ochrana proti Timeooutu)
-        // Cílíme na max 2000 bodů, což je pro mapu i DB ideální
+        // 2. KONTROLA POI BODŮ (před proředěním pro přesnost)
+        console.log("📍 Kontrola POI bodů v importovaném GPX...");
+        const { data: pois } = await supabase.from("poi_points").select("id, lat, lon, name");
+        
+        if (pois && pois.length > 0) {
+          const unlockedPois = new Set<string>();
+          
+          for (const point of allPoints) {
+            for (const poi of pois) {
+              if (unlockedPois.has(poi.id)) continue;
+              
+              const dist = calculateDistance(point.lat, point.lon, poi.lat, poi.lon) * 1000;
+              if (dist <= 100) { // Limit 100 metrů
+                unlockedPois.add(poi.id);
+                console.log(`🌟 Nalezen POI v GPX: ${poi.name}`);
+              }
+            }
+          }
+
+          if (unlockedPois.size > 0) {
+            console.log(`💾 Ukládám ${unlockedPois.size} odemčených POI do databáze...`);
+            const inserts = Array.from(unlockedPois).map(poiId => ({
+              team_id: teamId,
+              poi_id: poiId
+            }));
+
+            // Použijeme upsert nebo insert s ignore (řešeno přes RLS nebo unikátní klíč v DB)
+            const { error: poiError } = await supabase
+              .from("team_poi_progress")
+              .upsert(inserts, { onConflict: "team_id, poi_id" });
+
+            if (poiError) console.error("Chyba při ukládání POI progresu:", poiError);
+          }
+        }
+
+        // 3. PROŘEDĚNÍ BODŮ PRO MAPU/HISTORII
         const maxPoints = 2000;
         const skip = Math.ceil(allPoints.length / maxPoints);
         const trackPoints = skip > 1 
           ? allPoints.filter((_, index) => index % skip === 0) 
           : allPoints;
 
-        console.log(`Původně bodů: ${allPoints.length}, odesílám proředěných: ${trackPoints.length}`);
-
-        const teamId = localStorage.getItem("knin_team_id");
         const sessionId = crypto.randomUUID();
 
-        // 4. Volání RPC funkce
+        // 4. Volání RPC funkce pro uložení trasy
         const { error } = await supabase.rpc("import_gpx_points", {
           t_id: teamId,
           s_id: sessionId,
@@ -61,7 +104,7 @@ export function GpxImport({ onImportComplete }: { onImportComplete: () => void }
 
         if (error) throw error;
         
-        alert(`Úspěšně importováno ${trackPoints.length} bodů (z původních ${allPoints.length}).`);
+        alert(`Úspěšně importováno. Trasa má ${trackPoints.length} bodů a bylo automaticky odemčeno nalezené POI.`);
         onImportComplete();
       } catch (err: unknown) {
         console.error("Chyba při importu:", err);
@@ -76,7 +119,6 @@ export function GpxImport({ onImportComplete }: { onImportComplete: () => void }
   };
 
   return (
-    <>
     <label className="flex items-center w-full cursor-pointer py-1">
       <span className="font-bold uppercase">{uploading ? "Nahrávám..." : "Importovat GPX"}</span>
       <input
@@ -87,8 +129,5 @@ export function GpxImport({ onImportComplete }: { onImportComplete: () => void }
         onClick={(e) => e.stopPropagation()}
       />
     </label>
-    </>
-
   );
 }
-
