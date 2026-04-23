@@ -63,31 +63,34 @@ export function PoiModal({
   const questions: QuizQuestion[] = React.useMemo(() => {
     if (!poi.quiz_data) return [];
     
-    let raw = poi.quiz_data;
-    if (typeof raw === "string") {
+    let rawData: unknown = poi.quiz_data;
+    if (typeof rawData === "string") {
       try {
-        raw = JSON.parse(raw);
+        rawData = JSON.parse(rawData);
       } catch (e) {
         return [];
       }
     }
 
-    const arr = Array.isArray(raw) ? raw : [raw];
+    const arr = Array.isArray(rawData) ? rawData : [rawData];
 
-    return arr.map((item: Record<string, unknown>) => {
-      if (item.q && Array.isArray(item.a)) {
+    return arr.map((item: unknown) => {
+      if (typeof item !== "object" || item === null) return null;
+      const obj = item as Record<string, unknown>;
+
+      if (obj.q && Array.isArray(obj.a)) {
         return {
-          q: String(item.q),
-          a: item.a.map(String),
-          c: typeof item.c === "number" ? item.c : 0
+          q: String(obj.q),
+          a: obj.a.map(String),
+          c: typeof obj.c === "number" ? obj.c : 0
         };
       }
-      if (item.question && Array.isArray(item.options)) {
-        const options = item.options.map(String);
+      if (obj.question && Array.isArray(obj.options)) {
+        const options = obj.options.map(String);
         return {
-          q: String(item.question),
+          q: String(obj.question),
           a: options,
-          c: options.indexOf(String(item.answer)) !== -1 ? options.indexOf(String(item.answer)) : 0
+          c: options.indexOf(String(obj.answer)) !== -1 ? options.indexOf(String(obj.answer)) : 0
         };
       }
       return null;
