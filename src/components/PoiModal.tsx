@@ -21,7 +21,7 @@ interface Poi {
   id: string;
   name: string;
   history_text?: string;
-  quiz_data?: QuizQuestion[];
+  quiz_data?: QuizQuestion | QuizQuestion[] | string;
 }
 
 interface PoiModalProps {
