@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -9,7 +9,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { BadgeQuestionMark } from "lucide-react";
+import { BadgeQuestionMark, CheckCircle2, XCircle } from "lucide-react";
 
 interface QuizQuestion {
   q: string;
@@ -18,6 +18,7 @@ interface QuizQuestion {
 }
 
 interface Poi {
+  id: string;
   name: string;
   history_text?: string;
   quiz_data?: QuizQuestion[];
@@ -28,15 +29,73 @@ interface PoiModalProps {
   isOpen: boolean;
   onClose: () => void;
   isUnlocked: boolean;
+  savedResponses?: Record<number, number>;
+  onAnswer?: (poiId: string, questionIdx: number, answerIdx: number) => void;
 }
 
-export function PoiModal({ poi, isOpen, onClose, isUnlocked }: PoiModalProps) {
+export function PoiModal({ 
+  poi, 
+  isOpen, 
+  onClose, 
+  isUnlocked, 
+  savedResponses = {}, 
+  onAnswer = () => {} 
+}: PoiModalProps) {
   const [showQuiz, setShowQuiz] = useState(false);
+  // Lokální stav pro okamžitou odezvu UI, inicializovaný z DB
+  const [localAnswers, setLocalAnswers] = useState<Record<number, number>>(savedResponses);
+
+  // Synchronizace s DB, když se změní vybraný bod nebo přijdou nová data
+  React.useEffect(() => {
+    setLocalAnswers(savedResponses);
+  }, [savedResponses, poi?.id]);
 
   if (!poi) return null;
 
+  // Resetovat lokální zobrazení při zavření
+  const handleClose = () => {
+    setShowQuiz(false);
+    onClose();
+  };
+
+
+  // Normalizace kvízových dat
+  const questions: QuizQuestion[] = React.useMemo(() => {
+    if (!poi.quiz_data) return [];
+    
+    let raw = poi.quiz_data;
+    if (typeof raw === "string") {
+      try {
+        raw = JSON.parse(raw);
+      } catch (e) {
+        return [];
+      }
+    }
+
+    const arr = Array.isArray(raw) ? raw : [raw];
+
+    return arr.map((item: Record<string, unknown>) => {
+      if (item.q && Array.isArray(item.a)) {
+        return {
+          q: String(item.q),
+          a: item.a.map(String),
+          c: typeof item.c === "number" ? item.c : 0
+        };
+      }
+      if (item.question && Array.isArray(item.options)) {
+        const options = item.options.map(String);
+        return {
+          q: String(item.question),
+          a: options,
+          c: options.indexOf(String(item.answer)) !== -1 ? options.indexOf(String(item.answer)) : 0
+        };
+      }
+      return null;
+    }).filter((q): q is QuizQuestion => q !== null);
+  }, [poi.quiz_data]);
+
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-2xl font-bold text-primary">
@@ -64,10 +123,11 @@ export function PoiModal({ poi, isOpen, onClose, isUnlocked }: PoiModalProps) {
                 </p>
               </div>
               <Button
-              variant="default"
-              size="lg"
-              className="flex items-center gap-2 text-base m-auto text-white"
-               onClick={() => setShowQuiz(true)}>
+                variant="default"
+                size="lg"
+                className="flex items-center gap-2 text-base m-auto text-white"
+                onClick={() => setShowQuiz(true)}
+              >
                 <BadgeQuestionMark />CHCI ODPOVĚDĚT NA KVÍZ
               </Button>
             </>
@@ -76,33 +136,57 @@ export function PoiModal({ poi, isOpen, onClose, isUnlocked }: PoiModalProps) {
               <h4 className="font-bold text-secondary text-center uppercase tracking-wider">
                 Kvízové otázky
               </h4>
-              {poi.quiz_data &&
-                poi.quiz_data.map((item: QuizQuestion, qIdx: number) => (
+              {questions.map((item: QuizQuestion, qIdx: number) => {
+                const selectedIdx = localAnswers[qIdx];
+                const isAnswered = selectedIdx !== undefined;
+
+                return (
                   <div
                     key={qIdx}
                     className="space-y-3 p-4 bg-slate-50 rounded-lg border border-slate-100"
                   >
                     <p className="font-bold text-slate-800 text-sm">{item.q}</p>
                     <div className="grid gap-2">
-                      {item.a.map((option: string, optIdx: number) => (
-                        <Button
-                          key={optIdx}
-                          variant="outline"
-                          className="justify-start text-left h-auto py-2 px-4 hover:bg-blue-50 transition-colors text-sm"
-                          onClick={() => {
-                            if (optIdx === item.c) {
-                              alert("Správně! 🌟");
-                            } else {
-                              alert("To není ono, zkus to znovu. 🧐");
-                            }
-                          }}
-                        >
-                          {option}
-                        </Button>
-                      ))}
+                      {item.a.map((option: string, optIdx: number) => {
+                        const isCorrect = optIdx === item.c;
+                        const isSelected = selectedIdx === optIdx;
+                        
+                        let variant: "outline" | "default" | "destructive" | "secondary" = "outline";
+                        let className = "justify-start text-left h-auto py-2 px-4 transition-all text-sm";
+
+                        if (isAnswered) {
+                          if (isCorrect) {
+                            className += " bg-green-100 border-green-500 text-green-700 hover:bg-green-100";
+                          } else if (isSelected) {
+                            className += " bg-red-100 border-red-500 text-red-700 hover:bg-red-100";
+                          } else {
+                            className += " opacity-50 cursor-not-allowed";
+                          }
+                        }
+
+                        return (
+                          <Button
+                            key={optIdx}
+                            variant={variant}
+                            disabled={isAnswered}
+                            className={className}
+                            onClick={() => {
+                              setLocalAnswers(prev => ({ ...prev, [qIdx]: optIdx }));
+                              onAnswer(poi.id, qIdx, optIdx);
+                            }}
+                          >
+                            <div className="flex items-center gap-2 w-full">
+                              <span className="flex-grow">{option}</span>
+                              {isAnswered && isCorrect && <CheckCircle2 className="size-4 text-green-600 shrink-0" />}
+                              {isAnswered && isSelected && !isCorrect && <XCircle className="size-4 text-red-600 shrink-0" />}
+                            </div>
+                          </Button>
+                        );
+                      })}
                     </div>
                   </div>
-                ))}
+                );
+              })}
               <Button
                 variant="ghost"
                 className="w-full"

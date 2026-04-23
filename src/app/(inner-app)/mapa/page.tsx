@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { SokolLoader } from "@/components/SokolLoader";
@@ -38,12 +38,20 @@ interface GeoJSONData {
   coordinates: [number, number][];
 }
 
+interface QuizQuestion {
+  q: string;
+  a: string[];
+  c: number;
+}
+
 interface PoiPoint {
   id: string;
   lat: number;
   lon: number;
   name: string;
   description?: string;
+  history_text?: string;
+  quiz_data?: QuizQuestion | QuizQuestion[] | string; // JSON column from Supabase
 }
 
 export default function MapPage() {
@@ -60,6 +68,7 @@ export default function MapPage() {
   const [loading, setLoading] = useState(true);
   const [poiPoints, setPoiPoints] = useState<PoiPoint[]>([]);
   const [unlockedIds, setUnlockedIds] = useState<Set<string>>(new Set());
+  const [quizResponses, setQuizResponses] = useState<Record<string, Record<number, number>>>({});
   const [selectedPoi, setSelectedPoi] = useState<PoiPoint | null>(null);
   const router = useRouter();
   const [isFullScreen, setIsFullScreen] = useState(false);
@@ -205,10 +214,32 @@ export default function MapPage() {
           .select("poi_id")
           .eq("team_id", teamId);
 
+        const teamName = localStorage.getItem("knin_team_name") || "";
+        const isKrakonos = teamName.toLowerCase() === "krakonos";
+
         if (progress) {
           const ids = new Set(progress.map((p) => String(p.poi_id)));
+          
+          // Speciální bypass pro testera (Krakonoš)
+          if (isKrakonos && pois) {
+            pois.forEach(p => ids.add(String(p.id)));
+            console.log("🎅 Krakonoš detekován: Všechny body odemčeny pro testování.");
+          }
+
           setUnlockedIds(ids);
           console.log("🔓 Odemčené body:", ids.size);
+        }
+
+        // 5. Načtení odpovědí na kvíz
+        const { data: teamData } = await supabase
+          .from("teams")
+          .select("quiz_responses")
+          .eq("id", teamId)
+          .maybeSingle();
+
+        if (teamData?.quiz_responses) {
+          setQuizResponses(teamData.quiz_responses as Record<string, Record<number, number>>);
+          console.log("📝 Načteny předchozí odpovědi na kvíz.");
         }
 
         setDebugMsg("GPS připravena");
@@ -234,14 +265,14 @@ export default function MapPage() {
 
         const distToPoi = calculateDistance(lat, lon, poi.lat, poi.lon) * 1000;
 
-        if (distToPoi <= 100) {
+        if (distToPoi <= 10) {
           const teamId = localStorage.getItem("knin_team_id");
           if (teamId) {
             const { error } = await supabase
               .from("team_poi_progress")
               .insert({ team_id: teamId, poi_id: poi.id });
 
-            if (!error || (error && (error as any).code === "23505")) {
+            if (!error || (error && "code" in error && error.code === "23505")) {
               setUnlockedIds((prev) => new Set([...prev, String(poi.id)]));
               setDebugMsg(`🌟 BOD ODEMČEN: ${poi.name}`);
             }
@@ -258,6 +289,27 @@ export default function MapPage() {
     const mins = Math.floor(paceDecimal);
     const secs = Math.round((paceDecimal - mins) * 60);
     return `${mins}:${secs.toString().padStart(2, "0")}`;
+  };
+
+  const handleQuizAnswer = async (poiId: string, qIdx: number, aIdx: number) => {
+    const teamId = localStorage.getItem("knin_team_id");
+    if (!teamId) return;
+
+    // Aktualizace lokálního stavu
+    const newResponses = {
+      ...quizResponses,
+      [poiId]: {
+        ...(quizResponses[poiId] || {}),
+        [qIdx]: aIdx
+      }
+    };
+    setQuizResponses(newResponses);
+
+    // Uložení do Supabase
+    await supabase
+      .from("teams")
+      .update({ quiz_responses: newResponses })
+      .eq("id", teamId);
   };
 
   if (loading)
@@ -293,7 +345,7 @@ export default function MapPage() {
           </div>
 
           {/* Tempo */}
-          <div className="flex flex-col border-l border-slate-200 pl-4 hidden xs:flex">
+          <div className="hidden flex-col border-l border-slate-200 pl-4 xs:flex">
             <span className="text-[10px] font-bold text-def-text uppercase leading-none mb-1">
               Tempo
             </span>
@@ -313,7 +365,7 @@ export default function MapPage() {
       </div>
       
       {/* Map Container */}
-      <div className={`grow relative bg-slate-200 transition-all duration-300 ${isFullScreen ? 'fixed inset-0 z-[1001]' : ''}`}>
+      <div className={`grow relative bg-slate-200 transition-all duration-300 ${isFullScreen ? 'fixed inset-0 z-1001' : ''}`}>
         <div className="flex gap-2 absolute top-5 right-5 z-1000 bg-white p-2 rounded-full shadow-md">
            <Button
             onClick={() => setIsFullScreen(!isFullScreen)}
@@ -334,6 +386,8 @@ export default function MapPage() {
           isOpen={!!selectedPoi}
           onClose={() => setSelectedPoi(null)}
           isUnlocked={selectedPoi ? unlockedIds.has(selectedPoi.id) : false}
+          savedResponses={selectedPoi ? quizResponses[selectedPoi.id] : {}}
+          onAnswer={handleQuizAnswer}
         />
         <MapWithNoSSR
           routeCoordinates={route}

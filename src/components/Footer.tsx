@@ -16,6 +16,15 @@ export function Footer() {
         >
           Jakub Zykl
         </Button>
+        {" | "}
+        <Button
+          variant="link"
+          size="link"
+          onClick={() => window.location.href = "/admin"}
+          className="text-[10px] opacity-30 hover:opacity-100"
+        >
+          Admin
+        </Button>
       </p>
     </footer>
   );

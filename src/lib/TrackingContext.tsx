@@ -68,7 +68,7 @@ export const TrackingProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   // WakeLock
   useEffect(() => {
-    let wakeLock: any = null;
+    let wakeLock: { release: () => Promise<void> } | null = null;
     const requestWakeLock = async () => {
       try {
         if ("wakeLock" in navigator) {

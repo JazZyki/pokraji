@@ -87,6 +87,47 @@ export default function Map({
   // Startujeme na 0, aby první načtení location nespustilo autofocus
   const [forceCenterTrigger, setForceCenterTrigger] = React.useState(0);
 
+  // --- OPTIMALIZACE: Seskupování bodů stejné barvy ---
+  const coloredLines = React.useMemo(() => {
+    const lines: { positions: [number, number][]; color: string }[] = [];
+
+    segments.forEach((segment, sIdx) => {
+      if (segment.points.length < 2) return;
+
+      let currentChunk: [number, number][] = [segment.points[0].coords];
+      // Barva prvního úseku je určena barvou druhého bodu (cíle prvního segmentu)
+      let currentColor = getPathColor(segment.points[1] || segment.points[0]);
+
+      for (let i = 1; i < segment.points.length; i++) {
+        const point = segment.points[i];
+        const pointColor = getPathColor(point);
+
+        currentChunk.push(point.coords);
+
+        if (pointColor !== currentColor) {
+          // Barva se změnila -> uložíme dosavadní chunk
+          lines.push({
+            positions: [...currentChunk],
+            color: currentColor,
+          });
+          // Nový chunk začíná posledním bodem předchozího, aby na sebe navazovaly
+          currentChunk = [point.coords];
+          currentColor = pointColor;
+        }
+      }
+
+      // Přidáme poslední zbytek
+      if (currentChunk.length > 1) {
+        lines.push({
+          positions: currentChunk,
+          color: currentColor,
+        });
+      }
+    });
+
+    return lines;
+  }, [segments]);
+
   return (
     <div className="relative w-full h-full">
       <MapContainer
@@ -123,21 +164,13 @@ export default function Map({
           />
         ))}
 
-        {/* Historie trasy */}
-        {segments.map((segment, sIdx) => (
-          <React.Fragment key={`segment-${sIdx}`}>
-            {segment.points.map((point, pIdx) => {
-              if (pIdx === 0) return null;
-              const prevPoint = segment.points[pIdx - 1];
-              return (
-                <Polyline
-                  key={`line-${sIdx}-${pIdx}`}
-                  positions={[prevPoint.coords, point.coords]}
-                  pathOptions={{ color: getPathColor(point), weight: 5 }}
-                />
-              );
-            })}
-          </React.Fragment>
+        {/* Historie trasy - optimalizovaná verze */}
+        {coloredLines.map((line, idx) => (
+          <Polyline
+            key={`track-line-${idx}`}
+            positions={line.positions}
+            pathOptions={{ color: line.color, weight: 5 }}
+          />
         ))}
 
         {userLocation && (
