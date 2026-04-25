@@ -1,12 +1,13 @@
 {
   "name": "novy-knin-trek",
-  "version": "0.1.0",
+  "version": "1.05",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "version-up": "node scripts/version-up.js"
   },
   "dependencies": {
     "@base-ui/react": "^1.3.0",

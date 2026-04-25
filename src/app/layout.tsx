@@ -4,6 +4,7 @@ import "leaflet/dist/leaflet.css";
 import { Work_Sans } from "next/font/google";
 import { cn } from "@/lib/utils";
 import { ThemeProvider } from "next-themes";
+import { PWAUpdateHandler } from "@/components/PWAUpdateHandler";
 
 const WorkSans = Work_Sans({
   variable: "--font-work-sans",
@@ -35,18 +36,8 @@ export default function RootLayout({
       <body className={`${WorkSans.variable} antialiased`}>
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
           {children}
+          <PWAUpdateHandler />
         </ThemeProvider>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', function() {
-          navigator.serviceWorker.register('/sw.js');
-        });
-      }
-    `,
-          }}
-        />
       </body>
     </html>
   );
