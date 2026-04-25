@@ -170,7 +170,9 @@ export default function MapPage() {
                 acc[sId].push({
                   coords: [h.lat_val, h.lon_val],
                   dist: dist,
-                  isOff: dist > 500,
+                  // Pokud je vzdálenost > 110m, považujeme to za vnější prostor (vždy zelená)
+                  // Tím eliminujeme oranžovou barvu (101-200m) v historii
+                  isOff: dist > 110,
                   sessionId: sId,
                   created_at: h.created_at,
                 });
@@ -265,7 +267,7 @@ export default function MapPage() {
 
         const distToPoi = calculateDistance(lat, lon, poi.lat, poi.lon) * 1000;
 
-        if (distToPoi <= 10) {
+        if (distToPoi <= 20) {
           const teamId = localStorage.getItem("knin_team_id");
           if (teamId) {
             const { error } = await supabase
@@ -275,6 +277,11 @@ export default function MapPage() {
             if (!error || (error && "code" in error && error.code === "23505")) {
               setUnlockedIds((prev) => new Set([...prev, String(poi.id)]));
               setDebugMsg(`🌟 BOD ODEMČEN: ${poi.name}`);
+              
+              // Haptická odezva: dvě krátká zavibrování
+              if ("vibrate" in navigator) {
+                navigator.vibrate([100, 50, 100]);
+              }
             }
           }
         }

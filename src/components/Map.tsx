@@ -41,6 +41,9 @@ const getPathColor = (point: TrackPoint) => {
   // Pokud jsme mimo teritorium (isOff), je vše OK -> zelená
   if (point.isOff) return "#16a34a";
   
+  // Pokud vzdálenost není definována, defaultně zelená (prevence červené linky při chybě dat)
+  if (point.dist === undefined || point.dist === null) return "#16a34a";
+
   // Pokud jsme v teritoriu, barva podle vzdálenosti od trasy
   if (point.dist <= 100) return "#16a34a"; // Zelená (na trase do 100m)
   if (point.dist <= 200) return "#f97316"; // Oranžová (blízko 101-200m)
@@ -153,7 +156,7 @@ export default function Map({
           <Circle
             key={poi.id}
             center={[poi.lat, poi.lon]}
-            radius={30}
+            radius={15}
             pathOptions={{
               color: unlockedIds?.has(poi.id) ? "#16a34a" : "#e40521",
               fillColor: unlockedIds?.has(poi.id) ? "#16a34a" : "#e40521",

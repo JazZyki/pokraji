@@ -27,6 +27,10 @@ export function PWAUpdateHandler() {
               if (newWorker.state === "installed" && navigator.serviceWorker.controller) {
                 setWaitingWorker(newWorker);
                 setShowUpdate(true);
+                // Vibrace při detekci nové verze
+                if ("vibrate" in navigator) {
+                  navigator.vibrate(200);
+                }
               }
             });
           }

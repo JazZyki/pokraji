@@ -16,7 +16,7 @@ This document provides essential context and instructions for AI agents working 
 ### Key Features
 - **Real-time Tracking:** Uses the Geolocation API to monitor and record user positions.
 - **Route Persistence:** Tracks are stored in segments to handle session interruptions and multi-day activities.
-- **POI System:** Points of Interest (POIs) that unlock automatically when a user is within range (100m).
+- **POI System:** Points of Interest (POIs) that unlock automatically when a user is within range (20m).
 - **Analytics:** Calculates distance, elapsed time, and pace (min/km).
 - **Offline First:** Designed to load and function (mapping) even with intermittent connectivity.
 

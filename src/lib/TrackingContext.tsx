@@ -85,6 +85,11 @@ export const TrackingProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, [isTracking]);
 
   const handleToggleTracking = useCallback(() => {
+    // Krátká haptická odezva při stisku tlačítka
+    if ("vibrate" in navigator) {
+      navigator.vibrate(50);
+    }
+
     if (!isTrackingRef.current) {
       const newSessionId = crypto.randomUUID();
       localStorage.setItem("current_session_id", newSessionId);
@@ -136,10 +141,14 @@ export const TrackingProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
             if (!error && data) {
               lastSavedPos.current = { lat: latitude, lon: longitude };
+              // Supabase RPC vrací distance_from_route a is_off
+              const currentDist = data.distance_from_route ?? 0;
+              const isOffTrack = data.is_off ?? false;
+
               const newPoint: TrackPoint = {
                 coords: [latitude, longitude],
-                dist: data.dist,
-                isOff: data.is_off,
+                dist: currentDist,
+                isOff: isOffTrack,
                 sessionId: sId,
               };
               setSegments((prev) => {
@@ -153,7 +162,7 @@ export const TrackingProvider: React.FC<{ children: React.ReactNode }> = ({ chil
                 newSegments[lastIdx] = updatedLastSegment;
                 return newSegments;
               });
-              setDebugMsg(data.is_off ? `❗ MIMO TRASU (${Math.round(data.dist)}m)` : `✅ OK: ${new Date().toLocaleTimeString()}`);
+              setDebugMsg(isOffTrack ? `❗ MIMO TRASU (${Math.round(currentDist)}m)` : `✅ OK: ${new Date().toLocaleTimeString()}`);
             }
           }
         }
