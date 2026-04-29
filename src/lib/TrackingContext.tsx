@@ -6,7 +6,6 @@ import { supabase } from "./supabase";
 export interface TrackPoint {
   coords: [number, number];
   dist: number;
-  isOff?: boolean;
   sessionId?: string;
   created_at?: string;
 }
@@ -141,14 +140,12 @@ export const TrackingProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
             if (!error && data) {
               lastSavedPos.current = { lat: latitude, lon: longitude };
-              // Supabase RPC vrací distance_from_route a is_off
+              // Supabase RPC vrací distance_from_route
               const currentDist = data.distance_from_route ?? 0;
-              const isOffTrack = data.is_off ?? false;
 
               const newPoint: TrackPoint = {
                 coords: [latitude, longitude],
                 dist: currentDist,
-                isOff: isOffTrack,
                 sessionId: sId,
               };
               setSegments((prev) => {
@@ -162,7 +159,7 @@ export const TrackingProvider: React.FC<{ children: React.ReactNode }> = ({ chil
                 newSegments[lastIdx] = updatedLastSegment;
                 return newSegments;
               });
-              setDebugMsg(isOffTrack ? `❗ MIMO TRASU (${Math.round(currentDist)}m)` : `✅ OK: ${new Date().toLocaleTimeString()}`);
+              setDebugMsg(`✅ OK: ${new Date().toLocaleTimeString()}`);
             }
           }
         }

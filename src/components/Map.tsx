@@ -36,18 +36,11 @@ function MapRecenter({
   return null;
 }
 
-// Pomocná funkce pro barvu
-const getPathColor = (point: TrackPoint) => {
-  // Pokud jsme mimo teritorium (isOff), je vše OK -> zelená
-  if (point.isOff) return "#16a34a";
-  
-  // Pokud vzdálenost není definována, defaultně zelená (prevence červené linky při chybě dat)
-  if (point.dist === undefined || point.dist === null) return "#16a34a";
-
-  // Pokud jsme v teritoriu, barva podle vzdálenosti od trasy
-  if (point.dist <= 100) return "#16a34a"; // Zelená (na trase do 100m)
-  if (point.dist <= 200) return "#f97316"; // Oranžová (blízko 101-200m)
-  return "#dc2626"; // Červená (mimo > 200m)
+// Pomocná funkce pro barvu - návrat k logice před 22.4.2026
+const getPathColor = (dist: number) => {
+  if (dist <= 50) return "#16a34a"; // Zelená (na trase)
+  if (dist <= 150) return "#f97316"; // Oranžová (blízko)
+  return "#dc2626"; // Červená (mimo)
 };
 
 interface TrackSegment {
@@ -68,7 +61,6 @@ interface MapProps {
 interface TrackPoint {
   coords: [number, number];
   dist: number;
-  isOff?: boolean;
 }
 
 interface PoiPoint {
@@ -94,16 +86,16 @@ export default function Map({
   const coloredLines = React.useMemo(() => {
     const lines: { positions: [number, number][]; color: string }[] = [];
 
-    segments.forEach((segment, sIdx) => {
+    segments.forEach((segment) => {
       if (segment.points.length < 2) return;
 
       let currentChunk: [number, number][] = [segment.points[0].coords];
       // Barva prvního úseku je určena barvou druhého bodu (cíle prvního segmentu)
-      let currentColor = getPathColor(segment.points[1] || segment.points[0]);
+      let currentColor = getPathColor(segment.points[1]?.dist ?? segment.points[0].dist);
 
       for (let i = 1; i < segment.points.length; i++) {
         const point = segment.points[i];
-        const pointColor = getPathColor(point);
+        const pointColor = getPathColor(point.dist);
 
         currentChunk.push(point.coords);
 

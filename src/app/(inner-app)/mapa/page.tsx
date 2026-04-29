@@ -105,15 +105,15 @@ export default function MapPage() {
     const segmentDist = segment.points.reduce((segAcc, point, idx) => {
       if (idx === 0) return 0;
       const prev = segment.points[idx - 1];
-      return (
-        segAcc +
-        calculateDistance(
-          prev.coords[0],
-          prev.coords[1],
-          point.coords[0],
-          point.coords[1],
-        )
+      const dist = calculateDistance(
+        prev.coords[0],
+        prev.coords[1],
+        point.coords[0],
+        point.coords[1],
       );
+      // Ignorujeme nereálné skoky (např. > 0.5 km mezi dvěma bezprostředně po sobě jdoucími body)
+      if (dist > 0.5) return segAcc;
+      return segAcc + dist;
     }, 0);
     return acc + segmentDist;
   }, 0);
@@ -162,38 +162,64 @@ export default function MapPage() {
           if (history && !histError) {
             console.log(`📊 Staženo ${history.length} bodů historie.`);
             
-            const grouped = history.reduce(
-              (acc: { [key: string]: TrackPoint[] }, h) => {
-                const sId = h.session_id || "old_session";
-                if (!acc[sId]) acc[sId] = [];
-                const dist = h.distance_from_route || 0;
-                acc[sId].push({
-                  coords: [h.lat_val, h.lon_val],
-                  dist: dist,
-                  // Pokud je vzdálenost > 110m, považujeme to za vnější prostor (vždy zelená)
-                  // Tím eliminujeme oranžovou barvu (101-200m) v historii
-                  isOff: dist > 110,
-                  sessionId: sId,
-                  created_at: h.created_at,
-                });
-                return acc;
-              },
-              {},
-            );
+            const processedSegments: { points: TrackPoint[] }[] = [];
+            let currentPoints: TrackPoint[] = [];
+            let lastTime = 0;
+            let lastLat = 0;
+            let lastLon = 0;
+            let lastSessionId = "";
 
-            const newSegments = Object.values(grouped).map((points) => ({
-              points,
-            }));
+            history.forEach((h) => {
+              const currentTime = new Date(h.created_at).getTime();
+              const sId = h.session_id || "missing";
+              
+              let isNewSegment = false;
+              
+              if (currentPoints.length === 0) {
+                isNewSegment = true;
+              } else {
+                // Skok 1: Změna ID vycházky (session_id)
+                if (sId !== lastSessionId) isNewSegment = true;
+                
+                // Skok 2: Časová proluka větší než 15 minut mezi body
+                if (currentTime - lastTime > 15 * 60 * 1000) isNewSegment = true;
+                
+                // Skok 3: Nereálná vzdálenost - pokud bod uskočí o více než 1 km
+                const distToLast = calculateDistance(lastLat, lastLon, h.lat_val, h.lon_val);
+                if (distToLast > 1) isNewSegment = true;
+              }
+              
+              if (isNewSegment && currentPoints.length > 0) {
+                processedSegments.push({ points: currentPoints });
+                currentPoints = [];
+              }
+              
+              currentPoints.push({
+                coords: [h.lat_val, h.lon_val],
+                dist: h.distance_from_route || 0,
+                sessionId: sId,
+                created_at: h.created_at
+              });
+              
+              lastTime = currentTime;
+              lastLat = h.lat_val;
+              lastLon = h.lon_val;
+              lastSessionId = sId;
+            });
             
-            console.log("🧩 Zpracované segmenty:", newSegments.length, newSegments);
-            setSegments(newSegments);
+            if (currentPoints.length > 0) {
+              processedSegments.push({ points: currentPoints });
+            }
+            
+            console.log("🧩 Zpracované segmenty:", processedSegments.length, processedSegments);
+            setSegments(processedSegments);
 
             let totalSecondsFromHistory = 0;
-            Object.values(grouped).forEach((points: TrackPoint[]) => {
-              if (points.length > 1) {
-                const start = new Date(points[0].created_at || "").getTime();
+            processedSegments.forEach((segment) => {
+              if (segment.points.length > 1) {
+                const start = new Date(segment.points[0].created_at || "").getTime();
                 const end = new Date(
-                  points[points.length - 1].created_at || "",
+                  segment.points[segment.points.length - 1].created_at || "",
                 ).getTime();
                 totalSecondsFromHistory += Math.floor((end - start) / 1000);
               }

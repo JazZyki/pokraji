@@ -7,7 +7,6 @@ import { SokolLoader } from "@/components/SokolLoader";
 import { PoiModal } from "@/components/PoiModal";
 import { Footer } from "@/components/Footer";
 
-
 interface SessionStats {
   id: string;
   distance: number;
@@ -72,100 +71,151 @@ export default function StatsPage() {
   const [selectedPoi, setSelectedPoi] = useState<PoiStats | null>(null);
 
   useEffect(() => {
-  const fetchStats = async () => {
-    try {
-      setLoading(true);
-      const teamId = localStorage.getItem("knin_team_id");
-      if (!teamId) {
-        setLoading(false);
-        return;
-      }
-
-      // 1. Načtení dat
-      const [historyRes, poisRes, progressRes] = await Promise.all([
-        supabase
-          .from("team_tracking")
-          .select("lat_val, lon_val, session_id, created_at")
-          .eq("team_id", teamId)
-          .order("created_at", { ascending: true }),
-        supabase
-          .from("poi_points")
-          .select("id, name, lat, lon, description"),
-        supabase
-          .from("team_poi_progress")
-          .select("poi_id, unlocked_at")
-          .eq("team_id", teamId)
-      ]);
-
-      // 2. Zpracování historie (vycházek)
-      if (historyRes.data && historyRes.data.length > 0) {
-        const grouped = historyRes.data.reduce((acc: Record<string, TrackingPoint[]>, curr) => {
-          const sId = curr.session_id || "default";
-          if (!acc[sId]) acc[sId] = [];
-          acc[sId].push(curr);
-          return acc;
-        }, {});
-
-        const processedSessions = Object.entries(grouped).map(([id, points]) => {
-          let dist = 0;
-          for (let i = 1; i < points.length; i++) {
-            dist += calculateDistance(
-              points[i - 1].lat_val,
-              points[i - 1].lon_val,
-              points[i].lat_val,
-              points[i].lon_val
-            );
-          }
-          const start = new Date(points[0].created_at);
-          const end = new Date(points[points.length - 1].created_at);
-
-          return {
-            id,
-            distance: dist,
-            duration: Math.max(0, Math.floor((end.getTime() - start.getTime()) / 1000)),
-            date: start.toLocaleDateString("cs-CZ"),
-          };
-        }).filter(s => s.distance > 0.005);
-
-        setSessions(processedSessions.sort((a, b) => 
-          new Date(b.id === 'default' ? 0 : b.date.split('.').reverse().join('-')).getTime() - 
-          new Date(a.id === 'default' ? 0 : a.date.split('.').reverse().join('-')).getTime()
-        ));
-      }
-
-      // 3. Zpracování POI (Zásadní oprava mapování)
-      if (poisRes.data) {
-        // Vytvoříme Mapu se stringovými klíči pro jistotu
-        const progressMap = new Map();
-        if (progressRes.data) {
-          progressRes.data.forEach(p => {
-            progressMap.set(String(p.poi_id).toLowerCase(), p.unlocked_at);
-          });
+    const fetchStats = async () => {
+      try {
+        setLoading(true);
+        const teamId = localStorage.getItem("knin_team_id");
+        if (!teamId) {
+          setLoading(false);
+          return;
         }
 
-        const mappedPois = poisRes.data.map((p) => {
-          const poiIdLower = String(p.id).toLowerCase();
-          const unlockedAt = progressMap.get(poiIdLower);
-          
-          return {
-            ...p,
-            isUnlocked: progressMap.has(poiIdLower),
-            unlockedAt: unlockedAt || null,
-          };
-        });
+        // 1. Načtení dat
+        const [historyRes, poisRes, progressRes] = await Promise.all([
+          supabase
+            .from("team_tracking")
+            .select("lat_val, lon_val, session_id, created_at")
+            .eq("team_id", teamId)
+            .order("created_at", { ascending: true }),
+          supabase
+            .from("poi_points")
+            .select("id, name, lat, lon, description"),
+          supabase
+            .from("team_poi_progress")
+            .select("poi_id, unlocked_at")
+            .eq("team_id", teamId)
+        ]);
 
-        setPois(mappedPois);
+        // 2. Zpracování historie (vycházek) s inteligentním dělením segmentů
+        if (historyRes.data && historyRes.data.length > 0) {
+          const processedSessions: SessionStats[] = [];
+          let currentPoints: TrackingPoint[] = [];
+          let lastTime = 0;
+          let lastLat = 0;
+          let lastLon = 0;
+          let lastSessionId = "";
+
+          historyRes.data.forEach((h) => {
+            const currentTime = new Date(h.created_at).getTime();
+            const sId = h.session_id || "default";
+
+            let isNewSegment = false;
+
+            if (currentPoints.length === 0) {
+              isNewSegment = true;
+            } else {
+              if (sId !== lastSessionId) isNewSegment = true;
+              if (currentTime - lastTime > 15 * 60 * 1000) isNewSegment = true; // Proluka > 15 min
+              const distToLast = calculateDistance(lastLat, lastLon, h.lat_val, h.lon_val);
+              if (distToLast > 1) isNewSegment = true; // Skok > 1 km
+            }
+
+            if (isNewSegment && currentPoints.length > 0) {
+              let dist = 0;
+              for (let i = 1; i < currentPoints.length; i++) {
+                const d = calculateDistance(
+                  currentPoints[i - 1].lat_val,
+                  currentPoints[i - 1].lon_val,
+                  currentPoints[i].lat_val,
+                  currentPoints[i].lon_val
+                );
+                if (d <= 0.5) dist += d; // Ignorování nereálných drobných skoků
+              }
+              const start = new Date(currentPoints[0].created_at);
+              const end = new Date(currentPoints[currentPoints.length - 1].created_at);
+
+              if (dist > 0.005) {
+                processedSessions.push({
+                  id: (currentPoints[0].session_id || "default") + "_" + start.getTime(),
+                  distance: dist,
+                  duration: Math.max(0, Math.floor((end.getTime() - start.getTime()) / 1000)),
+                  date: start.toLocaleDateString("cs-CZ"),
+                });
+              }
+              currentPoints = [];
+            }
+
+            currentPoints.push(h);
+            lastTime = currentTime;
+            lastLat = h.lat_val;
+            lastLon = h.lon_val;
+            lastSessionId = sId;
+          });
+
+          // Uložení posledního segmentu
+          if (currentPoints.length > 0) {
+            let dist = 0;
+            for (let i = 1; i < currentPoints.length; i++) {
+              const d = calculateDistance(
+                currentPoints[i - 1].lat_val,
+                currentPoints[i - 1].lon_val,
+                currentPoints[i].lat_val,
+                currentPoints[i].lon_val
+              );
+              if (d <= 0.5) dist += d;
+            }
+            const start = new Date(currentPoints[0].created_at);
+            const end = new Date(currentPoints[currentPoints.length - 1].created_at);
+
+            if (dist > 0.005) {
+              processedSessions.push({
+                id: (currentPoints[0].session_id || "default") + "_" + start.getTime(),
+                distance: dist,
+                duration: Math.max(0, Math.floor((end.getTime() - start.getTime()) / 1000)),
+                date: start.toLocaleDateString("cs-CZ"),
+              });
+            }
+          }
+
+          setSessions(processedSessions.sort((a, b) => {
+            const timeA = parseInt(a.id.split('_').pop() || "0");
+            const timeB = parseInt(b.id.split('_').pop() || "0");
+            return timeB - timeA;
+          }));
+        }
+
+        // 3. Zpracování POI
+        if (poisRes.data) {
+          const progressMap = new Map();
+          if (progressRes.data) {
+            progressRes.data.forEach(p => {
+              progressMap.set(String(p.poi_id).toLowerCase(), p.unlocked_at);
+            });
+          }
+
+          const mappedPois = poisRes.data.map((p) => {
+            const poiIdLower = String(p.id).toLowerCase();
+            const unlockedAt = progressMap.get(poiIdLower);
+            
+            return {
+              ...p,
+              isUnlocked: progressMap.has(poiIdLower),
+              unlockedAt: unlockedAt || null,
+            };
+          });
+
+          setPois(mappedPois);
+        }
+
+      } catch (err) {
+        console.error("Kritická chyba StatsPage:", err);
+      } finally {
+        setLoading(false);
       }
+    };
 
-    } catch (err) {
-      console.error("Kritická chyba StatsPage:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  fetchStats();
-}, []);
+    fetchStats();
+  }, []);
 
   if (loading) return <SokolLoader />;
 
@@ -223,7 +273,6 @@ export default function StatsPage() {
           {pois.map((poi) => (
             <div
               key={poi.id}
-              // 4. Přidáno onClick a styly pro klikatelnost
               onClick={() => setSelectedPoi(poi)}
               className={`p-3 rounded-xl border transition-all flex flex-col justify-start text-sm cursor-pointer active:scale-95 shadow-sm ${
                 poi.isUnlocked
