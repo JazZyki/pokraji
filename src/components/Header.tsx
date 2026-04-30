@@ -50,32 +50,41 @@ export default function Header() {
     return () => clearInterval(interval);
   }, [pathname]);
 
-  const navItems = [
-    { name: "Mapa trasy", href: "/mapa", modal: null, icon: MapIcon, color: "bg-blue-500" },
+  interface NavItem {
+    name: string;
+    href: string;
+    modal: ActiveModal | undefined;
+    icon: any;
+    color?: string;
+    badge?: boolean;
+  }
+
+  const navItems: NavItem[] = [
+    { name: "Mapa trasy", href: "/mapa", modal: undefined, icon: MapIcon, color: "bg-blue-500" },
     {
       name: "Moje Statistiky",
       href: "/statistiky",
-      modal: "stats" as ActiveModal,
+      modal: "stats",
       icon: Trophy,
     },
     {
       name: "Diskuse",
       href: "/nastenka",
-      modal: "board" as ActiveModal,
+      modal: "board",
       icon: MessageSquare,
       badge: hasNewMessage,
     },
     {
       name: "Pravidla a Info",
       href: "/info",
-      modal: "info" as ActiveModal,
+      modal: "info",
       icon: BookOpen,
     },
   ];
 
-  const handleNavigate = (item: typeof navItems[0]) => {
+  const handleNavigate = (item: NavItem) => {
     setIsOpen(false);
-    if (item.modal !== undefined) {
+    if (item.modal) {
       setActiveModal(item.modal);
     } else {
       setActiveModal(null);
