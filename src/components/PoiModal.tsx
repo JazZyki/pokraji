@@ -20,6 +20,7 @@ interface QuizQuestion {
 interface Poi {
   id: string;
   name: string;
+  title?: string;
   history_text?: string;
   quiz_data?: QuizQuestion | QuizQuestion[] | string;
 }
@@ -33,17 +34,18 @@ interface PoiModalProps {
   onAnswer?: (poiId: string, questionIdx: number, answerIdx: number) => void;
 }
 
-export function PoiModal({ 
-  poi, 
-  isOpen, 
-  onClose, 
-  isUnlocked, 
-  savedResponses = {}, 
-  onAnswer = () => {} 
+export function PoiModal({
+  poi,
+  isOpen,
+  onClose,
+  isUnlocked,
+  savedResponses = {},
+  onAnswer = () => {},
 }: PoiModalProps) {
   const [showQuiz, setShowQuiz] = useState(false);
   // Lokální stav pro okamžitou odezvu UI, inicializovaný z DB
-  const [localAnswers, setLocalAnswers] = useState<Record<number, number>>(savedResponses);
+  const [localAnswers, setLocalAnswers] =
+    useState<Record<number, number>>(savedResponses);
 
   // Synchronizace s DB, když se změní vybraný bod nebo přijdou nová data
   React.useEffect(() => {
@@ -58,11 +60,10 @@ export function PoiModal({
     onClose();
   };
 
-
   // Normalizace kvízových dat
   const questions: QuizQuestion[] = React.useMemo(() => {
     if (!poi.quiz_data) return [];
-    
+
     let rawData: unknown = poi.quiz_data;
     if (typeof rawData === "string") {
       try {
@@ -74,27 +75,32 @@ export function PoiModal({
 
     const arr = Array.isArray(rawData) ? rawData : [rawData];
 
-    return arr.map((item: unknown) => {
-      if (typeof item !== "object" || item === null) return null;
-      const obj = item as Record<string, unknown>;
+    return arr
+      .map((item: unknown) => {
+        if (typeof item !== "object" || item === null) return null;
+        const obj = item as Record<string, unknown>;
 
-      if (obj.q && Array.isArray(obj.a)) {
-        return {
-          q: String(obj.q),
-          a: obj.a.map(String),
-          c: typeof obj.c === "number" ? obj.c : 0
-        };
-      }
-      if (obj.question && Array.isArray(obj.options)) {
-        const options = obj.options.map(String);
-        return {
-          q: String(obj.question),
-          a: options,
-          c: options.indexOf(String(obj.answer)) !== -1 ? options.indexOf(String(obj.answer)) : 0
-        };
-      }
-      return null;
-    }).filter((q): q is QuizQuestion => q !== null);
+        if (obj.q && Array.isArray(obj.a)) {
+          return {
+            q: String(obj.q),
+            a: obj.a.map(String),
+            c: typeof obj.c === "number" ? obj.c : 0,
+          };
+        }
+        if (obj.question && Array.isArray(obj.options)) {
+          const options = obj.options.map(String);
+          return {
+            q: String(obj.question),
+            a: options,
+            c:
+              options.indexOf(String(obj.answer)) !== -1
+                ? options.indexOf(String(obj.answer))
+                : 0,
+          };
+        }
+        return null;
+      })
+      .filter((q): q is QuizQuestion => q !== null);
   }, [poi.quiz_data]);
 
   return (
@@ -102,7 +108,7 @@ export function PoiModal({
       <DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-2xl font-bold text-primary">
-            {poi.name}
+            {poi.title || poi.name}
           </DialogTitle>
           <DialogDescription>
             {isUnlocked
@@ -118,12 +124,12 @@ export function PoiModal({
             </p>
           ) : !showQuiz ? (
             <>
-              <div className="prose prose-slate">
-                <h4 className="font-bold">Něco z historie:</h4>
-                <p className="text-sm leading-relaxed text-slate-700">
-                  {poi.history_text ||
-                    "K tomuto místu zatím nemáme žádný příběh, ale i tak je tu krásně!"}
-                </p>
+              <div className="prose prose-slate prose-sm max-w-none">
+                {/* Zde zobrazíš nový titulek */}
+                <div
+                  className="leading-relaxed text-slate-700"
+                  dangerouslySetInnerHTML={{ __html: poi.history_text || "" }}
+                />
               </div>
               <Button
                 variant="default"
@@ -131,7 +137,8 @@ export function PoiModal({
                 className="flex items-center gap-2 text-base m-auto text-white"
                 onClick={() => setShowQuiz(true)}
               >
-                <BadgeQuestionMark />CHCI ODPOVĚDĚT NA KVÍZ
+                <BadgeQuestionMark />
+                CHCI ODPOVĚDĚT NA KVÍZ
               </Button>
             </>
           ) : (
@@ -153,15 +160,22 @@ export function PoiModal({
                       {item.a.map((option: string, optIdx: number) => {
                         const isCorrect = optIdx === item.c;
                         const isSelected = selectedIdx === optIdx;
-                        
-                        let variant: "outline" | "default" | "destructive" | "secondary" = "outline";
-                        let className = "justify-start text-left h-auto py-2 px-4 transition-all text-sm";
+
+                        let variant:
+                          | "outline"
+                          | "default"
+                          | "destructive"
+                          | "secondary" = "outline";
+                        let className =
+                          "justify-start text-left h-auto py-2 px-4 transition-all text-sm";
 
                         if (isAnswered) {
                           if (isCorrect) {
-                            className += " bg-green-100 border-green-500 text-green-700 hover:bg-green-100";
+                            className +=
+                              " bg-green-100 border-green-500 text-green-700 hover:bg-green-100";
                           } else if (isSelected) {
-                            className += " bg-red-100 border-red-500 text-red-700 hover:bg-red-100";
+                            className +=
+                              " bg-red-100 border-red-500 text-red-700 hover:bg-red-100";
                           } else {
                             className += " opacity-50 cursor-not-allowed";
                           }
@@ -174,14 +188,21 @@ export function PoiModal({
                             disabled={isAnswered}
                             className={className}
                             onClick={() => {
-                              setLocalAnswers(prev => ({ ...prev, [qIdx]: optIdx }));
+                              setLocalAnswers((prev) => ({
+                                ...prev,
+                                [qIdx]: optIdx,
+                              }));
                               onAnswer(poi.id, qIdx, optIdx);
                             }}
                           >
                             <div className="flex items-center gap-2 w-full">
                               <span className="flex-grow">{option}</span>
-                              {isAnswered && isCorrect && <CheckCircle2 className="size-4 text-green-600 shrink-0" />}
-                              {isAnswered && isSelected && !isCorrect && <XCircle className="size-4 text-red-600 shrink-0" />}
+                              {isAnswered && isCorrect && (
+                                <CheckCircle2 className="size-4 text-green-600 shrink-0" />
+                              )}
+                              {isAnswered && isSelected && !isCorrect && (
+                                <XCircle className="size-4 text-red-600 shrink-0" />
+                              )}
                             </div>
                           </Button>
                         );

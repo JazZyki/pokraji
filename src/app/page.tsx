@@ -193,8 +193,8 @@ export default function RegisterPage() {
           <Image
             src="/pokraji_logo.png"
             alt="PoTrati Sokol Nový Knín"
-            width={100}
-            height={100}
+            width={277}
+            height={71}
             className="w-full h-auto mb-6 object-contain"
           />
         </div>
@@ -211,7 +211,7 @@ export default function RegisterPage() {
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
                   Tým připraven
                 </p>
-                <h2 className="text-3xl text-secondary">
+                <h2 className="text-3xl text-secondary font-black">
                   <SokolText text={existingTeam.name} />
                 </h2>
               </div>

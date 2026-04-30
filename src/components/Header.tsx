@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { GpxImport } from "@/components/GpxImport";
+import { useTracking, ActiveModal } from "@/lib/TrackingContext";
 
 export default function Header() {
   const [isOpen, setIsOpen] = useState(false);
@@ -29,6 +30,7 @@ export default function Header() {
   const router = useRouter();
   const pathname = usePathname();
   const { theme, setTheme } = useTheme();
+  const { setActiveModal, activeModal } = useTracking();
 
   // --- LOGIKA SLEDOVÁNÍ NOVÝCH ZPRÁV (TEČKA) ---
   useEffect(() => {
@@ -49,28 +51,36 @@ export default function Header() {
   }, [pathname]);
 
   const navItems = [
-    { name: "Mapa trasy", href: "/mapa", icon: MapIcon, color: "bg-blue-500" },
+    { name: "Mapa trasy", href: "/mapa", modal: null, icon: MapIcon, color: "bg-blue-500" },
     {
       name: "Moje Statistiky",
       href: "/statistiky",
+      modal: "stats" as ActiveModal,
       icon: Trophy,
     },
     {
       name: "Diskuse",
       href: "/nastenka",
+      modal: "board" as ActiveModal,
       icon: MessageSquare,
       badge: hasNewMessage,
     },
     {
       name: "Pravidla a Info",
       href: "/info",
+      modal: "info" as ActiveModal,
       icon: BookOpen,
     },
   ];
 
-  const handleNavigate = (href: string) => {
+  const handleNavigate = (item: typeof navItems[0]) => {
     setIsOpen(false);
-    router.push(href);
+    if (item.modal !== undefined) {
+      setActiveModal(item.modal);
+    } else {
+      setActiveModal(null);
+      router.push(item.href);
+    }
   };
 
   const handleLogout = () => {
@@ -89,7 +99,10 @@ export default function Header() {
           width={140}
           height={60}
           className="h-10 w-auto cursor-pointer"
-          onClick={() => router.push("/mapa")}
+          onClick={() => {
+            setActiveModal(null);
+            router.push("/mapa");
+          }}
         />
 
         <button
@@ -127,12 +140,14 @@ export default function Header() {
 
           {/* Navigační položky */}
           <nav className="flex-grow p-4 space-y-3 overflow-y-auto">
-            {navItems.map((item) => (
+            {navItems.map((item) => {
+              const isActive = (item.modal === activeModal) || (item.href === "/mapa" && !activeModal);
+              return (
               <button
                 key={item.href}
-                onClick={() => handleNavigate(item.href)}
+                onClick={() => handleNavigate(item)}
                 className={`w-full flex items-center p-4 rounded-2xl border transition-all bg-menu-btns text-def-text uppercase ${
-                  pathname === item.href
+                  isActive
                     ? "border-primary shadow-md ring-1 ring-primary/20 text-primary"
                     : "border-slate-100 shadow-sm active:scale-95"
                 }`}
@@ -142,7 +157,7 @@ export default function Header() {
                 </div>
                 <div className="flex-grow text-left">
                   <span
-                    className={`font-bold block ${pathname === item.href ? "text-def-text" : "text-def-text"}`}
+                    className={`font-bold block ${isActive ? "text-def-text" : "text-def-text"}`}
                   >
                     {item.name}
                   </span>
@@ -153,10 +168,10 @@ export default function Header() {
                   )}
                 </div>
                 <ChevronRight
-                  className={`size-5 ${pathname === item.href ? "text-primary" : "text-slate-300"}`}
+                  className={`size-5 ${isActive ? "text-primary" : "text-slate-300"}`}
                 />
               </button>
-            ))}
+            )})}
             <div className="w-full flex items-center p-4 rounded-2xl border border-slate-100 bg-menu-btns shadow-sm active:scale-95 transition-all">
               <div className="p-3 rounded-xl text-white bg-secondary mr-4">
                 <Upload className="size-6" />

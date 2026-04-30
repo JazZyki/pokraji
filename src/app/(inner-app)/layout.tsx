@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import { Footer } from "@/components/Footer";
 import { TrackingProvider } from "@/lib/TrackingContext";
+import { ModalManager } from "@/components/ModalManager";
 
 // Teď už ssr: false bude fungovat, protože jsme v Client Component
 const Header = dynamic(() => import("@/components/Header"), { 
@@ -17,14 +18,16 @@ export default function InnerAppLayout({ children }: { children: React.ReactNode
         <header className="flex-none">
           <Header />
         </header>
-        
+
         <main className="flex-1 relative overflow-hidden">
           {children}
         </main>
-        
+
         <footer className="flex-none">
           <Footer />
         </footer>
+
+        <ModalManager />
       </div>
     </TrackingProvider>
   );

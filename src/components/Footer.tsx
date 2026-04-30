@@ -10,9 +10,9 @@ export function Footer() {
       <p className="text-sm mb-1">
         &copy; {new Date().getFullYear()} <strong>PoKraji</strong>. Všechna práva vyhrazena.
       </p>
-      <p className="text-xs mb-1">
-        v{version} {" | "}
-        Programmed and designed by{" "}
+      <p className="flex justify-center gap-1 text-xs mb-1">
+        v{version} <span className="font-normal">|</span>
+        Programmed and designed by
         <Button
           variant="link"
           size="link"
@@ -20,12 +20,12 @@ export function Footer() {
         >
           Jakub Zykl
         </Button>
-        {" | "}
+        <span className="font-normal"> | </span>
         <Button
           variant="link"
           size="link"
           onClick={() => window.location.href = "/admin"}
-          className="text-[10px] opacity-30 hover:opacity-100"
+          className="opacity-30 hover:opacity-100"
         >
           Admin
         </Button>

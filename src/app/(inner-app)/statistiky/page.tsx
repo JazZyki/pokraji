@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { Trophy, Clock, MapPin, Footprints, Calendar } from "lucide-react";
 import { SokolLoader } from "@/components/SokolLoader";
 import { PoiModal } from "@/components/PoiModal";
-import { Footer } from "@/components/Footer";
+import { calculateDistance } from "@/lib/utils";
 
 interface SessionStats {
   id: string;
@@ -39,6 +39,8 @@ interface PoiData {
   lat: number;
   lon: number;
   description?: string;
+  history_text?: string;
+  quiz_data?: any;
 }
 
 interface PoiStats extends PoiData {
@@ -46,29 +48,12 @@ interface PoiStats extends PoiData {
   unlockedAt: string | null;
 }
 
-function calculateDistance(
-  lat1: number,
-  lon1: number,
-  lat2: number,
-  lon2: number,
-): number {
-  const R = 6371;
-  const dLat = (lat2 - lat1) * (Math.PI / 180);
-  const dLon = (lon2 - lon1) * (Math.PI / 180);
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(lat1 * (Math.PI / 180)) *
-      Math.cos(lat2 * (Math.PI / 180)) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
-  return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
-}
-
 export default function StatsPage() {
   const [sessions, setSessions] = useState<SessionStats[]>([]);
   const [pois, setPois] = useState<PoiStats[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedPoi, setSelectedPoi] = useState<PoiStats | null>(null);
+  const [quizResponses, setQuizResponses] = useState<Record<string, Record<number, number>>>({});
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -81,7 +66,7 @@ export default function StatsPage() {
         }
 
         // 1. Načtení dat
-        const [historyRes, poisRes, progressRes] = await Promise.all([
+        const [historyRes, poisRes, progressRes, teamRes] = await Promise.all([
           supabase
             .from("team_tracking")
             .select("lat_val, lon_val, session_id, created_at")
@@ -89,12 +74,21 @@ export default function StatsPage() {
             .order("created_at", { ascending: true }),
           supabase
             .from("poi_points")
-            .select("id, name, lat, lon, description"),
+            .select("id, name, lat, lon, description, history_text, quiz_data"),
           supabase
             .from("team_poi_progress")
             .select("poi_id, unlocked_at")
-            .eq("team_id", teamId)
+            .eq("team_id", teamId),
+          supabase
+            .from("teams")
+            .select("quiz_responses")
+            .eq("id", teamId)
+            .maybeSingle()
         ]);
+
+        if (teamRes.data?.quiz_responses) {
+          setQuizResponses(teamRes.data.quiz_responses as Record<string, Record<number, number>>);
+        }
 
         // 2. Zpracování historie (vycházek) s inteligentním dělením segmentů
         if (historyRes.data && historyRes.data.length > 0) {
@@ -175,15 +169,31 @@ export default function StatsPage() {
                 date: start.toLocaleDateString("cs-CZ"),
               });
             }
-          }
+            }
 
-          setSessions(processedSessions.sort((a, b) => {
-            const timeA = parseInt(a.id.split('_').pop() || "0");
-            const timeB = parseInt(b.id.split('_').pop() || "0");
-            return timeB - timeA;
-          }));
-        }
+            // --- NOVÁ LOGIKA: Sjednocení podle dní ---
+            const dailyStats: Record<string, SessionStats> = {};
+            processedSessions.forEach(session => {
+            if (!dailyStats[session.date]) {
+              dailyStats[session.date] = { ...session };
+            } else {
+              dailyStats[session.date].distance += session.distance;
+              dailyStats[session.date].duration += session.duration;
+            }
+            });
 
+            // Převedení zpět na pole a seřazení od nejnovějšího
+            const finalSessions = Object.values(dailyStats).sort((a, b) => {
+            // Převod "DD.MM.RRRR" na porovnatelný formát
+            const [dayA, monthA, yearA] = a.date.split('.').map(Number);
+            const [dayB, monthB, yearB] = b.date.split('.').map(Number);
+            const dateA = new Date(yearA, monthA - 1, dayA).getTime();
+            const dateB = new Date(yearB, monthB - 1, dayB).getTime();
+            return dateB - dateA;
+            });
+
+            setSessions(finalSessions);
+            }
         // 3. Zpracování POI
         if (poisRes.data) {
           const progressMap = new Map();
@@ -216,6 +226,27 @@ export default function StatsPage() {
 
     fetchStats();
   }, []);
+
+  const handleQuizAnswer = async (poiId: string, qIdx: number, aIdx: number) => {
+    const teamId = localStorage.getItem("knin_team_id");
+    if (!teamId) return;
+
+    // Aktualizace lokálního stavu
+    const newResponses = {
+      ...quizResponses,
+      [poiId]: {
+        ...(quizResponses[poiId] || {}),
+        [qIdx]: aIdx
+      }
+    };
+    setQuizResponses(newResponses);
+
+    // Uložení do Supabase
+    await supabase
+      .from("teams")
+      .update({ quiz_responses: newResponses })
+      .eq("id", teamId);
+  };
 
   if (loading) return <SokolLoader />;
 
@@ -298,8 +329,9 @@ export default function StatsPage() {
         isOpen={!!selectedPoi}
         onClose={() => setSelectedPoi(null)}
         isUnlocked={selectedPoi ? selectedPoi.isUnlocked : false}
+        savedResponses={selectedPoi ? quizResponses[selectedPoi.id] : {}}
+        onAnswer={handleQuizAnswer}
       />
-      <Footer />
     </div>
   );
 }

@@ -1,6 +1,6 @@
 {
   "name": "novy-knin-trek",
-  "version": "1.06",
+  "version": "1.07",
   "private": true,
   "scripts": {
     "dev": "next dev",
