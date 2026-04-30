@@ -20,12 +20,11 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { SokolLoader } from "@/components/SokolLoader";
-import { BadgeQuestionMark, MapPin, Users, Clock, TrendingUp, Trophy } from "lucide-react";
-
+import { MapPin, Users, Clock, TrendingUp, Trophy } from "lucide-react";
 import { calculateDistance } from "@/lib/utils";
 
-interface TeamStats {
-
+// Definice surových dat z DB
+interface TeamRaw {
   id: string;
   team_name: string;
   members: string[];
@@ -36,7 +35,7 @@ interface TeamStats {
 interface PoiPoint {
   id: string;
   name: string;
-  quiz_data?: QuizQuestion | QuizQuestion[] | string;
+  quiz_data?: any;
 }
 
 interface QuizQuestion {
@@ -48,6 +47,7 @@ interface QuizQuestion {
   answer?: string;
 }
 
+// Definice agregovaných statistik pro UI
 interface TeamStats {
   teamId: string;
   name: string;
@@ -68,7 +68,6 @@ export default function AdminPage() {
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    // V reálném nasazení by toto mělo být v env proměnné
     if (password === "sokol2026") {
       setIsAuthenticated(true);
       sessionStorage.setItem("admin_auth", "true");
@@ -108,8 +107,6 @@ export default function AdminPage() {
       setPois(poisData);
 
       // 3. Fetch Tracking data for all teams
-      // V ideálním případě bychom toto chtěli agregované z DB, 
-      // ale pro rozumný počet týmů to můžeme spočítat tady.
       const { data: trackingData, error: trackingError } = await supabase
         .from("team_tracking")
         .select("team_id, lat_val, lon_val, created_at, session_id")
@@ -118,10 +115,9 @@ export default function AdminPage() {
       if (trackingError) throw trackingError;
 
       // Agregace dat
-      const stats: TeamStats[] = (teamsData as TeamData[]).map(team => {
+      const stats: TeamStats[] = (teamsData as TeamRaw[]).map(team => {
         const teamPings = trackingData.filter(p => p.team_id === team.id);
         
-        // Výpočet vzdálenosti
         let distance = 0;
         let timeSeconds = 0;
         let lastPing = null;
@@ -129,7 +125,6 @@ export default function AdminPage() {
         if (teamPings.length > 0) {
           lastPing = teamPings[teamPings.length - 1].created_at;
           
-          // Seskupit podle session_id pro výpočet času a vzdálenosti v segmentech
           const sessions: Record<string, any[]> = {};
           teamPings.forEach(ping => {
             const sId = ping.session_id || "default";
@@ -153,7 +148,6 @@ export default function AdminPage() {
           });
         }
 
-        // Výpočet skóre kvízu
         let quizScore = 0;
         let totalQuestions = 0;
 
@@ -163,7 +157,6 @@ export default function AdminPage() {
             let quizArray: any[] = [];
             try {
               quizArray = Array.isArray(poi.quiz_data) ? poi.quiz_data : [poi.quiz_data];
-              // Podpora obou formátů (viz PoiModal)
               quizArray = quizArray.map(q => {
                 if (q.question && Array.isArray(q.options)) {
                   return { q: q.question, a: q.options, c: q.options.indexOf(q.answer) };
@@ -254,7 +247,6 @@ export default function AdminPage() {
           </div>
         </div>
 
-        {/* Stats Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -300,7 +292,6 @@ export default function AdminPage() {
           </Card>
         </div>
 
-        {/* Main Leaderboard */}
         <Card>
           <CardHeader>
             <CardTitle>Leaderboard & Statistiky</CardTitle>
