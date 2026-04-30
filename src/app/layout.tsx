@@ -15,6 +15,10 @@ export const metadata: Metadata = {
   title: "Nový Knín Trek",
   description: "Sledování trasy pro 50km trek",
   manifest: "/manifest.json",
+  icons: {
+    icon: "/favicon.ico",
+    apple: "/icon-192.png",
+  },
 };
 
 // Nový způsob definice viewportu a barev
