@@ -119,7 +119,7 @@ export function PoiModal({
 
         <div className="space-y-4 py-4">
           {!isUnlocked ? (
-            <p className="text-slate-500 italic">
+            <p className="text-def-text italic">
               Musíš dojít k tomuto místu, abys odemkl jeho historii a kvíz.
             </p>
           ) : !showQuiz ? (
@@ -127,7 +127,7 @@ export function PoiModal({
               <div className="prose prose-slate prose-sm max-w-none">
                 {/* Zde zobrazíš nový titulek */}
                 <div
-                  className="leading-relaxed text-slate-700"
+                  className="leading-relaxed text-def-text"
                   dangerouslySetInnerHTML={{ __html: poi.history_text || "" }}
                 />
               </div>
