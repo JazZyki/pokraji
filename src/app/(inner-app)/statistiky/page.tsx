@@ -65,13 +65,37 @@ export default function StatsPage() {
           return;
         }
 
-        // 1. Načtení dat
-        const [historyRes, poisRes, progressRes, teamRes] = await Promise.all([
-          supabase
+        // 1. Načtení dat (stránkované team_tracking)
+        let allHistory: any[] = [];
+        let from = 0;
+        const step = 1000;
+        let hasMore = true;
+
+        while (hasMore) {
+          const { data: chunk, error } = await supabase
             .from("team_tracking")
             .select("lat_val, lon_val, session_id, created_at")
             .eq("team_id", teamId)
-            .order("created_at", { ascending: true }),
+            .order("created_at", { ascending: true })
+            .range(from, from + step - 1);
+
+          if (error) {
+            console.error("Chyba při stahování historie:", error);
+            hasMore = false;
+            break;
+          }
+
+          if (chunk && chunk.length > 0) {
+            allHistory = [...allHistory, ...chunk];
+            from += step;
+            if (chunk.length < step) hasMore = false;
+            if (allHistory.length > 20000) hasMore = false;
+          } else {
+            hasMore = false;
+          }
+        }
+
+        const [poisRes, progressRes, teamRes] = await Promise.all([
           supabase
             .from("poi_points")
             .select("id, name, lat, lon, description, history_text, quiz_data"),
@@ -91,7 +115,7 @@ export default function StatsPage() {
         }
 
         // 2. Zpracování historie (vycházek) s inteligentním dělením segmentů
-        if (historyRes.data && historyRes.data.length > 0) {
+        if (allHistory.length > 0) {
           const processedSessions: SessionStats[] = [];
           let currentPoints: TrackingPoint[] = [];
           let lastTime = 0;
@@ -99,7 +123,7 @@ export default function StatsPage() {
           let lastLon = 0;
           let lastSessionId = "";
 
-          historyRes.data.forEach((h) => {
+          allHistory.forEach((h) => {
             const currentTime = new Date(h.created_at).getTime();
             const sId = h.session_id || "default";
 

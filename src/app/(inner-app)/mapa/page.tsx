@@ -129,20 +129,42 @@ export default function MapPage() {
         // 2. Načtení historie jen pokud ještě nemáme segments (např. při prvním loadu)
         if (segments.length === 0) {
           console.log("🛰️ Stahuji historii z team_tracking...");
-          const { data: history, error: histError } = await supabase
-            .from("team_tracking")
-            .select(
-              "lat_val, lon_val, distance_from_route, session_id, created_at",
-            )
-            .eq("team_id", teamId)
-            .order("created_at", { ascending: true });
+          
+          let allHistory: any[] = [];
+          let from = 0;
+          const step = 1000;
+          let hasMore = true;
 
-          if (histError) {
-            console.error("❌ Chyba při načítání historie:", histError.message);
+          while (hasMore) {
+            const { data: historyChunk, error: histError } = await supabase
+              .from("team_tracking")
+              .select(
+                "lat_val, lon_val, distance_from_route, session_id, created_at",
+              )
+              .eq("team_id", teamId)
+              .order("created_at", { ascending: true })
+              .range(from, from + step - 1);
+
+            if (histError) {
+              console.error("❌ Chyba při načítání historie:", histError.message);
+              hasMore = false;
+              break;
+            }
+
+            if (historyChunk && historyChunk.length > 0) {
+              allHistory = [...allHistory, ...historyChunk];
+              from += step;
+              // Pokud jsme dostali méně bodů než je krok, znamená to, že jsme na konci
+              if (historyChunk.length < step) hasMore = false;
+              // Bezpečnostní pojistka proti nekonečné smyčce
+              if (allHistory.length > 20000) hasMore = false;
+            } else {
+              hasMore = false;
+            }
           }
 
-          if (history && !histError) {
-            console.log(`📊 Staženo ${history.length} bodů historie.`);
+          if (allHistory.length > 0) {
+            console.log(`📊 Celkem staženo ${allHistory.length} bodů historie.`);
             
             const processedSegments: { points: TrackPoint[] }[] = [];
             let currentPoints: TrackPoint[] = [];
@@ -151,7 +173,7 @@ export default function MapPage() {
             let lastLon = 0;
             let lastSessionId = "";
 
-            history.forEach((h) => {
+            allHistory.forEach((h) => {
               const currentTime = new Date(h.created_at).getTime();
               const sId = h.session_id || "missing";
               

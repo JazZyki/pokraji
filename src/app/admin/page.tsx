@@ -106,17 +106,39 @@ export default function AdminPage() {
       if (poisError) throw poisError;
       setPois(poisData);
 
-      // 3. Fetch Tracking data for all teams
-      const { data: trackingData, error: trackingError } = await supabase
-        .from("team_tracking")
-        .select("team_id, lat_val, lon_val, created_at, session_id")
-        .order("created_at", { ascending: true });
+      // 3. Fetch Tracking data for all teams (PAGINATED)
+      let allTrackingData: any[] = [];
+      let from = 0;
+      const step = 1000;
+      let hasMore = true;
 
-      if (trackingError) throw trackingError;
+      while (hasMore) {
+        const { data: chunk, error } = await supabase
+          .from("team_tracking")
+          .select("team_id, lat_val, lon_val, created_at, session_id")
+          .order("created_at", { ascending: true })
+          .range(from, from + step - 1);
+
+        if (error) {
+          console.error("Admin: Error fetching tracking data:", error);
+          hasMore = false;
+          break;
+        }
+
+        if (chunk && chunk.length > 0) {
+          allTrackingData = [...allTrackingData, ...chunk];
+          from += step;
+          if (chunk.length < step) hasMore = false;
+          // Vyšší limit pro admina (všechny týmy)
+          if (allTrackingData.length > 50000) hasMore = false;
+        } else {
+          hasMore = false;
+        }
+      }
 
       // Agregace dat
       const stats: TeamStats[] = (teamsData as TeamRaw[]).map(team => {
-        const teamPings = trackingData.filter(p => p.team_id === team.id);
+        const teamPings = allTrackingData.filter(p => p.team_id === team.id);
         
         let distance = 0;
         let timeSeconds = 0;

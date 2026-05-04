@@ -27,22 +27,33 @@ export function GpxImport({ onImportComplete }: { onImportComplete: () => void }
         const gpx = new gpxParser();
         gpx.parse(xml);
 
-        // 1. Získání bodů z GPX
+        // 1. Získání bodů ze všech stop a cest v GPX
         interface GpxPoint {
           lat: number;
           lon: number;
         }
-        let rawPoints: GpxPoint[] = [];
-        if (gpx.tracks?.[0]?.points) rawPoints = gpx.tracks[0].points;
-        else if (gpx.routes?.[0]?.points) rawPoints = gpx.routes[0].points;
-        else if (gpx.waypoints) rawPoints = gpx.waypoints;
+        let allPoints: GpxPoint[] = [];
+        
+        if (gpx.tracks && gpx.tracks.length > 0) {
+          gpx.tracks.forEach(track => {
+            allPoints = [...allPoints, ...track.points];
+          });
+        }
+        
+        if (allPoints.length === 0 && gpx.routes && gpx.routes.length > 0) {
+          gpx.routes.forEach(route => {
+            allPoints = [...allPoints, ...route.points];
+          });
+        }
+        
+        if (allPoints.length === 0 && gpx.waypoints && gpx.waypoints.length > 0) {
+          allPoints = gpx.waypoints.map(p => ({ lat: p.lat, lon: p.lon }));
+        }
 
-        if (rawPoints.length === 0) throw new Error("GPX neobsahuje žádné body trasy.");
-
-        const allPoints = rawPoints.map(p => ({ lat: p.lat, lon: p.lon }));
+        if (allPoints.length === 0) throw new Error("GPX neobsahuje žádné body trasy.");
 
         // 2. KONTROLA POI BODŮ (před proředěním pro přesnost)
-        console.log("📍 Kontrola POI bodů v importovaném GPX...");
+        console.log(`📍 Kontrola POI bodů v importovaném GPX (${allPoints.length} bodů)...`);
         const { data: pois } = await supabase.from("poi_points").select("id, lat, lon, name");
         
         if (pois && pois.length > 0) {
@@ -67,7 +78,6 @@ export function GpxImport({ onImportComplete }: { onImportComplete: () => void }
               poi_id: poiId
             }));
 
-            // Použijeme upsert nebo insert s ignore (řešeno přes RLS nebo unikátní klíč v DB)
             const { error: poiError } = await supabase
               .from("team_poi_progress")
               .upsert(inserts, { onConflict: "team_id, poi_id" });
@@ -77,7 +87,8 @@ export function GpxImport({ onImportComplete }: { onImportComplete: () => void }
         }
 
         // 3. PROŘEDĚNÍ BODŮ PRO MAPU/HISTORII
-        const maxPoints = 2000;
+        // Zvýšeno na 5000 pro 50km trasu (1 bod / 10m)
+        const maxPoints = 5000;
         const skip = Math.ceil(allPoints.length / maxPoints);
         const trackPoints = skip > 1 
           ? allPoints.filter((_, index) => index % skip === 0) 
